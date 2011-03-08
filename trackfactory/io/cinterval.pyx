@@ -4,7 +4,6 @@ Created on Mar 6, 2011
 @author: mkiyer
 '''
 import numpy as np
-
 cimport numpy as np
 cimport cython
 cimport libc.stdio as stdio

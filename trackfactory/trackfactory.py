@@ -8,8 +8,9 @@ import os
 import numpy as np
 import tables
 
-from track import TrackError, REF_TRACK_NAME, get_ref_length
+from track import TrackError, REF_TRACK_NAME, TRACK_CLASS_ATTR, get_ref_length
 from arraytrack import ArrayTrack
+from coveragetrack import CoverageTrack
 from bitarraytrack import BitArrayTrack
 from sequencetrack import SequenceTrack
 from intervaltrack import IntervalTrack
@@ -57,8 +58,8 @@ class TrackFactory(object):
     'r+' It is similar to 'a', but the file must already exist.
     '''    
     # constants
-    TRACK_CLASS_ATTR = 'track_class'
     track_classes = [ArrayTrack, 
+                     CoverageTrack,
                      BitArrayTrack,
                      SequenceTrack, 
                      IntervalTrack]
@@ -75,6 +76,8 @@ class TrackFactory(object):
 
     def _get_hdf_file(self):
         return self.h5file._v_file
+
+    
 
     def create_track(self, track_name, track_class, *args, **kwargs):
         '''Add new :class:`Track` to the :class:`TrackFactory`
@@ -93,7 +96,7 @@ class TrackFactory(object):
             raise TrackError('track %s already exists' % track_name)
         group = self.h5file.createGroup(self.h5file.root, track_name)        
         # the subgroup needs to remember the track type
-        setattr(group._v_attrs, self.TRACK_CLASS_ATTR, track_class.__name__)
+        setattr(group._v_attrs, TRACK_CLASS_ATTR, track_class.__name__)
         return track_class(group, *args, **kwargs)
 
     def get_track(self, track_name):
@@ -107,7 +110,7 @@ class TrackFactory(object):
         if ('/' + track_name) not in self.h5file:
             raise TrackError('track %s does not exist' % track_name)        
         group = self.h5file.getNode(self.h5file.root, track_name)        
-        track_class_name = getattr(group._v_attrs, self.TRACK_CLASS_ATTR)
+        track_class_name = getattr(group._v_attrs, TRACK_CLASS_ATTR)
         return self.track_name_class_dict[track_class_name](group)
 
     def has_track(self, name):
