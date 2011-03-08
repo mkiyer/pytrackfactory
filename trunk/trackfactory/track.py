@@ -10,6 +10,7 @@ import pysam
 # constants
 REF_TRACK_NAME = 'references'
 REF_NODE_PATH = "/" + REF_TRACK_NAME
+TRACK_CLASS_ATTR = 'track_class'
 
 def get_ref_length(tbl, ref):
     length = None
@@ -49,6 +50,9 @@ class Track(object):
             end = self.get_ref_length(ref)        
         ca = self.hdf_group._f_getChild(ref)
         return ca, start, end
+
+    def get_type(self):
+        return self.hdf_group._v_attrs[TRACK_CLASS_ATTR]
 
     def get_ref_length(self, ref):
         """return the size of the reference `ref`"""

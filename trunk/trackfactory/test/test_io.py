@@ -74,8 +74,10 @@ class TestIO(unittest.TestCase):
                     #print chrom, start, end, arr, fullarr[start:end]
                     testarr[start:end] = arr                    
                     self.assertTrue(np.all(arr == fullarr[start:end]))
-            self.assertTrue(np.all(testarr == fullarr))
+            self.assertTrue(np.all(testarr == fullarr))   
+        #
         # test intervals on different chromosomes
+        #
         refiter = itertools.cycle(itertools.chain(itertools.repeat("chr1", 3),
                                                   itertools.repeat("chr2", 3) ,                                       
                                                   itertools.repeat("chr3", 3)))                                        
@@ -103,7 +105,7 @@ class TestIO(unittest.TestCase):
                     self.assertTrue(np.all(arr == fullarr[chrom][start:end]))
             for chrom in testarr:
                 self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))
-        
+
     def test_cinterval_to_array(self):        
         """Testing interval to array code"""
         ref = "chr1"        

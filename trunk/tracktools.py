@@ -6,8 +6,10 @@ Created on Mar 5, 2011
 import argparse
 import logging
 import os
+import sys
 import subprocess
 import numpy as np
+import pysam
 
 from trackfactory.track import get_refs_from_sam, get_refs_from_bam, \
     get_refs_from_bowtie_index, parse_interval
@@ -16,6 +18,7 @@ from trackfactory.io.cwiggle import WiggleReader
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
+from trackfactory.coveragetrack import CoverageTrack
 
 ACTION_CREATE = "create"
 ACTION_ADD = "add"
@@ -102,8 +105,45 @@ def add_array_track(parser, options):
         logging.info("inserting data file %s (type=%s)" % 
                      (options.data_file, options.file_type))
         if options.file_type == "wiggle":
+            # add wiggle file
             t.fromintervals(WiggleReader(open(options.data_file)))
+        elif options.file_type == "bam":
+            # add BAM file
+            bamfh = pysam.Samfile(options.data_file, "rb")
+            t.frombam(bamfh, 
+                      options.bam_rlen,
+                      options.bam_nh,
+                      options.bam_prob,
+                      options.bam_max_multihits)
+            bamfh.close()
     tf.close()
+
+def add_coverage_track(parser, options):
+    tf = TrackFactory(options.file, "r+")
+    if tf.has_track(options.name):
+        tf.close()
+        parser.error("trackfactory '%s' already has track named '%s'" %
+                     (options.file, options.name))
+    t = tf.create_track(options.name, CoverageTrack)
+    logging.info("added %s %s to trackfactory %s" %
+                 (CoverageTrack.__name__, options.name, options.file))
+    if options.data_file is not None:
+        if not os.path.isfile(options.data_file):
+            parser.error("data file '%s' not found or not a regular file" % 
+                         (options.data_file))
+        logging.info("inserting data file %s (type=%s)" % 
+                     (options.data_file, options.file_type))
+        if options.file_type == "bam":
+            # add BAM file
+            bamfh = pysam.Samfile(options.data_file, "rb")
+            t.frombam(bamfh, 
+                      options.norm_rlen,
+                      options.bam_nh,
+                      options.bam_prob,
+                      options.max_multihits)
+            bamfh.close()
+    tf.close()
+
 
 def view_track(parser, options):
     tf = TrackFactory(options.file, "r")
@@ -113,7 +153,11 @@ def view_track(parser, options):
                      (options.file, options.name))    
     region = parse_interval(options.region)
     t = tf.get_track(options.name)
+    logging.debug("opened track '%s' type '%s'" % (options.name, t.get_type()))    
+    if t.get_type() == ArrayTrack.__name__:
+        t.tobedgraph(region, sys.stdout)        
     print t[region]
+    logging.debug("done")
     tf.close()
 
 def main():
@@ -202,8 +246,33 @@ def main():
     parser_arr.add_argument("data_file", default=None,
                             help="(optional) file containing data to "
                             "insert into track")
-    parser_arr.set_defaults(func=add_array_track,
-                            file_type="bed")    
+    #
+    # add a CoverageTrack
+    #
+    parser_cov = addsubparsers.add_parser(CoverageTrack.__name__,
+                                          help='coverage track')
+    parser_cov.add_argument("--bam", dest="file_type",
+                            action="store_const", const="bam",
+                            help="data file is in BAM format")
+    parser_cov.add_argument("--norm-rlen", dest="norm_rlen",
+                            action="store_true", default=False,
+                            help="normalize reads by length")
+    parser_cov.add_argument("--max-multihits", dest="max_multihits", 
+                            default=None,
+                            help="(BAM) maximum number of read hits "
+                            "allowed during coverage calculation")
+    parser_cov.add_argument("--bam-nh-tag", dest="bam_nh", default=None,
+                            help="(BAM) tag containing number of hits per "
+                            "read for use in calculate multimapping coverage")
+    parser_cov.add_argument("--bam-prob-tag", dest="bam_prob", default=None,
+                            help="(BAM) tag containing alignment "
+                            "probability read for use in calculating "
+                            "multimapping coverage")
+    parser_cov.add_argument("data_file", default=None,
+                            help="(optional) file containing data to "
+                            "insert into track")
+    parser_cov.set_defaults(func=add_coverage_track,
+                            file_type="bam")    
     #
     # create parser for "view" command
     #
@@ -213,7 +282,11 @@ def main():
     parser_view.add_argument('name', help="track name")
     parser_view.add_argument('region', default=None, 
                              help="genomic region")
-    parser_view.set_defaults(func=view_track)
+    parser_view.add_argument('--bedgraph', action="store_const", 
+                             const="bedgraph", dest="format", 
+                             help="output data in bedgraph format")    
+    parser_view.set_defaults(func=view_track,
+                             format=None)
     #    
     # parse the args and call whatever function was selected
     #
