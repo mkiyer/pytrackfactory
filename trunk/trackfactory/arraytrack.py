@@ -11,7 +11,7 @@ Created on Sep 14, 2010
 import logging
 import tables
 import numpy as np
-from track import Track, TrackError, parse_interval
+from track import Track, TrackError
 from io.interval import intervals_to_array
 
 DTYPE_ATTR = 'dtype'

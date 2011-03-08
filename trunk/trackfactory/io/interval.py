@@ -6,7 +6,6 @@ Created on Mar 6, 2011
 import numpy as np
 
 def write_interval_data_to_array(interval_iter, arr, chunksize):
-    debug = 0
     # check params
     if chunksize <= 0:
         chunksize = 1
@@ -45,9 +44,9 @@ def write_interval_data_to_array(interval_iter, arr, chunksize):
             chunk_arr[start-chunk_start:end-chunk_start] += value
         dirty = True
         #print 'newstate', chunk_start, chunk_end
-        debug += 1
-        if debug % 100000 == 0:
-            print "writing", debug, chunk_start, chunk_end
+        #debug += 1
+        #if debug % 100000 == 0:
+        #    print "writing", debug, chunk_start, chunk_end
     # write final chunk
     if dirty:
         arr[chunk_start:chunk_end] += chunk_arr[:chunk_end-chunk_start]

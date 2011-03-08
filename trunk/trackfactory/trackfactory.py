@@ -77,8 +77,6 @@ class TrackFactory(object):
     def _get_hdf_file(self):
         return self.h5file._v_file
 
-    
-
     def create_track(self, track_name, track_class, *args, **kwargs):
         '''Add new :class:`Track` to the :class:`TrackFactory`
         
