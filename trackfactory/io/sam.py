@@ -4,7 +4,7 @@ Created on Mar 6, 2011
 @author: mkiyer
 '''
 import array
-import numpy as np
+import collections
 
 CIGAR_M = 0 #match  Alignment match (can be a sequence match or mismatch)
 CIGAR_I = 1 #insertion  Insertion to the reference
@@ -43,47 +43,12 @@ def get_genomic_intervals(read):
     assert aend == read.aend
     return intervals
 
-
-#
-#def profile_bam(bamfh):
-#    for read in bamfh:
-#        hits += 1
-#        if read.mate_is_unmapped:
-#            mate_unmapped_reads += 1
-#        if read.is_unmapped or read.is_qcfail:
-#            unmapped_reads += 1
-#            num_read_hits = 0
-#            if read.is_qcfail:
-#                qcfail_reads += 1
-#        else:            
-#            if multimap:
-#                num_read_hits = read.opt('NH')
-#            else:
-#                num_read_hits = 1
-#            weighted_cov = 1.0 / num_read_hits
-#            # count reads
-#            reads += weighted_cov
-#            if read.is_duplicate:
-#                duplicate_reads += weighted_cov
-#            read_lengths[read.rlen] += weighted_cov
-#            # mismatch counts along read
-#            mm_iter = mismatch_re.finditer(read.opt('MD'))
-#            offset = 0
-#            for mismatch in mm_iter:
-#                skip, mmbase = mismatch.groups()
-#                offset += int(skip)
-#                if mmbase:
-#                    pos = (read.rlen - offset - 1) if read.is_reverse else 0
-#                    cycle_mismatch_counts[pos] += weighted_cov
-#            # total mismatches per read
-#            read_mismatch_counts[read.opt('NM')] += weighted_cov
-#        multihit_counts[num_read_hits] += 1
-
-
 class BamCoverageStatistics:
     def __init__(self):
         self.num_reads = 0
         self.total_cov = 0.0
+        self.read_lengths = collections.defaultdict(lambda: 0.0)
+        
     
 class BamCoverageIterator:
     """
@@ -142,91 +107,12 @@ class BamCoverageIterator:
                     continue
                 cov /= nh
             self.stats.num_reads += 1
+            self.stats.read_lengths[read.rlen] += 1
             # find genomic intervals of read alignment
             for start, end, seq in get_genomic_intervals(read):
                 #print 'START', start, 'END', end, 'SEQ', seq        
                 if self.norm_rlen:
                     cov /= (end - start)
                 #print start, end, read.is_reverse, cov, seq
-                self.stats.total_cov += (end - start) * cov
+                self.stats.total_cov += (end - start) * cov                
                 self.intervals.append((start, end, read.is_reverse, cov, seq))
-
-def calc_cov(pileupcolumn, norm_rlen, nh_tag, prob_tag, mmap_max):
-    cov = 0
-    for pileupread in pileupcolumn.pileups:
-        alignment = pileupread.alignment
-        readcov = 1.0
-        if prob_tag is not None:
-            readcov *= alignment.opt(prob_tag)
-        if nh_tag is not None:
-            nh = alignment.opt(nh_tag)
-            if nh > mmap_max:
-                continue
-            readcov /= nh
-        if norm_rlen:
-            # TODO: should actually use the genomic footprint of
-            # the read rather than the read length, because indels
-            # and other events can lead to extra coverage added
-            readcov /= alignment.rlen
-        cov += readcov
-    return cov
-
-def bam_pileup_to_array(pileup_iterator, arr,
-                        norm_rlen=False,
-                        num_hits_tag=None,
-                        hit_prob_tag=None,
-                        max_multimaps=None):
-    """stores read pileups in a chromosome-sized array
-    
-    :param norm_rlen: whether to normalize pileup coverage by read length
-    :param num_hits_tag: samtools tag that contains number of hits per read
-    :param hit_prob_tag: (optional)
-    """
-    dtype = arr.dtype
-    chunk_arr = array.array(dtype.char)
-    start = None
-    end = None
-    for pileupcolumn in pileup_iterator:
-        pos = pileupcolumn.pos        
-        if start == None:
-            start, end = pos, pos
-        elif end != pos:
-            arr[start:end] = np.array(chunk_arr, dtype=dtype)
-            del chunk_arr
-            chunk_arr = array.array(dtype.char)
-            start, end = pos, pos
-        end += 1
-        cov = calc_cov(pileupcolumn, norm_rlen, num_hits_tag, hit_prob_tag, 
-                       max_multimaps)
-        chunk_arr.append(cov)
-    # flush remaining array elements
-    if len(chunk_arr) > 0:
-        arr[start:(start + len(chunk_arr))] = np.array(chunk_arr, dtype=dtype)
-
-def calc_cov_intervals(read_iterator,
-                       norm_rlen=False,
-                       num_hits_tag=None,
-                       hit_prob_tag=None,
-                       max_multimaps=None):
-    """
-    :param norm_rlen: whether to normalize pileup coverage by read length
-    :param num_hits_tag: samtools tag that contains number of hits per read
-    :param hit_prob_tag: (optional)
-    """
-    for read in read_iterator:
-        strand = "-" if read.is_reverse else "+"
-        # compute read coverage
-        cov = 1.0
-        if hit_prob_tag is not None:
-            cov *= read.opt(hit_prob_tag)
-        elif num_hits_tag is not None:
-            nh = read.opt(num_hits_tag)
-            if (max_multimaps is not None) and (nh > max_multimaps):
-                continue
-            cov /= nh
-        # find genomic intervals of read alignment
-        for start,end,seq in get_genomic_intervals(read):        
-            if norm_rlen:
-                cov /= (end - start)
-            yield start, end, strand, cov, seq
-

@@ -98,7 +98,7 @@ def parse_interval(interval):
     >>> parse_interval("chr1:1,000-20,000")
     ("chr1", 1000, 20000)
     >>> parse_interval("chrX")
-    ("chrX", 0, None)
+    ("chrX", None, None)
     >>> parse_interval("chrX:5")
     ("chrX", 5, 6)
     >>> parse_interval(("chr2", 100, 300))
@@ -118,12 +118,12 @@ def parse_interval(interval):
                 end = start + 1
         else:
             ref = k
-            start = 0
+            start = None
             end = None
         return ref, start, end
     else:
         if len(interval) == 1:
-            return interval[0], 0, None
+            return interval[0], None, None
         elif len(interval) == 2:
             return interval[0], interval[1], interval[1]+1
         elif len(interval) >= 3:

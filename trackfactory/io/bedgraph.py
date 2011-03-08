@@ -6,10 +6,9 @@ Created on Sep 29, 2010
 import numpy as np
 import collections
 
-def array_to_bedgraph(arr, interval, fileh, factor=1.0):
-    ref, firstpos, lastpos = interval    
+def array_to_bedgraph(ref, array_iter, fileh, factor=1.0):
     start, end, cov = 0, 0, 0
-    for n in arr[firstpos:lastpos]:
+    for n in array_iter:
         if (start != end) and (cov != n):
             if cov > 0:
                 print >>fileh, "%s\t%d\t%d\t%.2f" % (ref, start, end, factor * cov)

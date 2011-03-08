@@ -140,7 +140,8 @@ def add_coverage_track(parser, options):
                       options.norm_rlen,
                       options.bam_nh,
                       options.bam_prob,
-                      options.max_multihits)
+                      options.max_multihits,
+                      options.keep_dup)
             bamfh.close()
     tf.close()
 
@@ -153,10 +154,12 @@ def view_track(parser, options):
                      (options.file, options.name))    
     region = parse_interval(options.region)
     t = tf.get_track(options.name)
-    logging.debug("opened track '%s' type '%s'" % (options.name, t.get_type()))    
-    if t.get_type() == ArrayTrack.__name__:
-        t.tobedgraph(region, sys.stdout)        
-    print t[region]
+    track_type = t.get_type()
+    logging.debug("opened track '%s' type '%s'" % (options.name, track_type))        
+    if track_type == CoverageTrack.__name__:
+        t.tobedgraph(region, sys.stdout)
+    else:
+        print t[region]
     logging.debug("done")
     tf.close()
 
@@ -261,6 +264,16 @@ def main():
                             default=None,
                             help="(BAM) maximum number of read hits "
                             "allowed during coverage calculation")
+    parser_cov.add_argument("--dup", dest="keepdup", 
+                            action="store_const", const=True, 
+                            help="(BAM) count duplicate reads")
+    parser_cov.add_argument("--nodup", dest="keep_dup", 
+                            action="store_const", const=False, 
+                            help="(BAM) count duplicate reads")
+    parser_cov.add_argument("--keepdup", dest="keep_dup", 
+                            default=None,
+                            help="(BAM) count duplicate reads")
+
     parser_cov.add_argument("--bam-nh-tag", dest="bam_nh", default=None,
                             help="(BAM) tag containing number of hits per "
                             "read for use in calculate multimapping coverage")
@@ -272,7 +285,8 @@ def main():
                             help="(optional) file containing data to "
                             "insert into track")
     parser_cov.set_defaults(func=add_coverage_track,
-                            file_type="bam")    
+                            file_type="bam",
+                            keep_dup=True)
     #
     # create parser for "view" command
     #
