@@ -43,16 +43,44 @@ class TestIntervalTrack(unittest.TestCase):
         if os.path.exists(self.filename):
             os.remove(self.filename)
 
+    def test_save_load_index(self):
+        """create a table, add intervals, save the index, and 
+        ensure the index persists when reloading the interval table
+        """
+        mytrack = self.tf.create_track('intervals1', IntervalTrack, 
+                                       expectedrows=500)
+        ref = 'gene1'
+        intervals = []
+        for i in xrange(100):
+            start = np.random.randint(0, 1150)
+            end = start + np.random.randint(1, 50)
+            interval = Interval(ref, start, end, i)
+            intervals.append(interval)
+            mytrack.add(interval)
+        # create and save index
+        mytrack.index(persist=True)
+        # save the index table
+        tblcopy = mytrack.indexes['gene1'].tree.tbl.copy()
+        tblroot = mytrack.indexes['gene1'].tree.root_id
+        # close and reopen the file
+        self.tf.close()
+        self.tf = TrackFactory(self.filename, 'r', refs=self.refs)
+        mytrack = self.tf.get_track('intervals1')
+        # compare indexes
+        self.assertTrue(np.all(tblcopy == mytrack.indexes['gene1'].tree.tbl))
+        self.assertEqual(tblroot, mytrack.indexes['gene1'].tree.root_id)
+
     def testNonOverlapping(self):
         # insert some non-overlapping intervals
-        mytrack = self.tf.create_track('intervals1', IntervalTrack, length=500)
+        mytrack = self.tf.create_track('intervals1', IntervalTrack, 
+                                       expectedrows=500)
         intervals = []
         for i,start in enumerate(xrange(0, 900, 50)):
             ref = 'gene1'
             end = start + 10
             interval = Interval(ref, start, end, i)
             intervals.append(interval)
-            mytrack.add(interval)
+            mytrack.add(interval)        
         # check intervals
         for i,interval in enumerate(intervals):
             hits = mytrack.intersect(interval.ref, interval.start, interval.end)

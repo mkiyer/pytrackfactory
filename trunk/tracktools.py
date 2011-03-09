@@ -157,12 +157,15 @@ def view_track(parser, options):
     track_type = t.get_type()
     logging.debug("opened track '%s' type '%s'" % (options.name, track_type))        
     if track_type == CoverageTrack.__name__:
-        if options.format == "bedgraph":
+        if options.file_type == "bedgraph":
             t.tobedgraph(region, sys.stdout)
         else:
             print t[region]
-    else:
-        print t[region]
+    elif track_type == ArrayTrack.__name__:
+        if options.file_type == "bedgraph":
+            t.tobedgraph(region, sys.stdout)
+        else:
+            print t[region]
     logging.debug("done")
     tf.close()
 
@@ -252,6 +255,8 @@ def main():
     parser_arr.add_argument("data_file", default=None,
                             help="(optional) file containing data to "
                             "insert into track")
+    parser_arr.set_defaults(func=add_array_track,
+                            file_type="wiggle")
     #
     # add a CoverageTrack
     #
@@ -297,13 +302,13 @@ def main():
                                        help="view data in a track")
     parser_view.add_argument('file', help='trackfactory file')
     parser_view.add_argument('name', help="track name")
-    parser_view.add_argument('region', default=None, 
-                             help="genomic region")
     parser_view.add_argument('--bedgraph', action="store_const", 
-                             const="bedgraph", dest="format", 
-                             help="output data in bedgraph format")    
+                             const="bedgraph", dest="file_type", 
+                             help="output data in bedgraph format")
+    parser_view.add_argument('region', nargs="?", default=None, 
+                             help="genomic region")
     parser_view.set_defaults(func=view_track,
-                             format=None)
+                             file_type=None)
     #    
     # parse the args and call whatever function was selected
     #

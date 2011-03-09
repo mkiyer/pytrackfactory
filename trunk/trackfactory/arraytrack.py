@@ -11,8 +11,9 @@ Created on Sep 14, 2010
 import logging
 import tables
 import numpy as np
-from track import Track, TrackError
+from track import Track, TrackError, parse_interval
 from io.interval import write_interval_data_to_array
+from io.cbedgraph import array_to_bedgraph
 
 DTYPE_ATTR = 'dtype'
 
@@ -85,6 +86,23 @@ class ArrayTrack(Track):
     def __setitem__(self, key, value):
         arr, start, end = self._parse_interval(key)
         arr[start:end] = value
+
+    def tobedgraph(self, interval, fileh, span=1, norm=False, mirror=False):
+        span = max(1, span)
+        factor = -1.0 if mirror else 1.0        
+        if norm:
+            factor = factor * (1.0e6  / (self.get_total_coverage()))
+        ref, start, end = parse_interval(interval)
+        if ref is None: 
+            rnames = self.get_rnames()
+        else:
+            rnames = [ref]
+        if start is None: start = 0
+        if end is None: end = -1
+        for rname in rnames:
+            array_to_bedgraph(rname, self._get_array(rname), fileh, 
+                              start=start, end=end, factor=factor, span=span,
+                              chunksize=self.h5_chunksize)
 
     def fromintervals(self, interval_iter):
         dtype = np.dtype(self._get_dtype())

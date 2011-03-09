@@ -104,6 +104,8 @@ def parse_interval(interval):
     >>> parse_interval(("chr2", 100, 300))
     ("chr2", 100, 300) 
     """
+    if interval is None:
+        return None, None, None
     if isinstance(interval, basestring):
         # remove commas
         k = interval.replace(',','')            
