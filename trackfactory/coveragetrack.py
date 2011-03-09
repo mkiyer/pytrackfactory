@@ -16,8 +16,6 @@ from track import TrackError, parse_interval
 from arraytrack import ArrayTrack
 from io.sam import BamCoverageIterator, BamCoverageStatistics
 from io.interval import write_interval_data_to_array
-from io.cbedgraph import array_to_bedgraph
-#from io.bedgraph import array_to_bedgraph
 
 COVERAGE_TRACK_DTYPE = np.float32
 NORM_RLEN_ATTR = "norm_rlen"
@@ -50,19 +48,6 @@ class CoverageTrack(ArrayTrack):
         ca = self.hdf_group._f_getChild(ref)
         return np.sum(ca[start:end]) * (1.0e9 / (self.get_total_coverage() * (end - start)))
 
-    def tobedgraph(self, interval, fileh, span=1, norm=False, mirror=False):
-        span = max(1, span)
-        factor = -1.0 if mirror else 1.0        
-        if norm:
-            factor = factor * (1.0e6  / (self.get_total_coverage()))
-        ref, start, end = parse_interval(interval)
-        if start is None: start = 0
-        if end is None: end = -1
-        arr = self._get_array(ref)
-        array_to_bedgraph(ref, arr, fileh, 
-                          start=start, end=end, factor=factor, span=span,
-                          chunksize=self.h5_chunksize)
-
     def frombam(self, bamfh, 
                 norm_rlen=False,
                 num_hits_tag=None,
@@ -91,28 +76,4 @@ class CoverageTrack(ArrayTrack):
         self.hdf_group._v_attrs[NORM_RLEN_ATTR] = norm_rlen
         # store statistics
         self.stats.tohdf(self.hdf_group)
-#
-#        self.stats = bamstats
-#        
-#        for rname in self.get_rnames():
-#            if rname not in bamfh.references:
-#                logging.debug("Reference %s not found in BAM header" % (rname))
-#                continue
-#            logging.debug("Adding ref '%s'" % (rname))            
-#            arr = self._get_array(rname)
-#            write_interval_data_to_array(intervalcoviter, 
-#                                         rname_array_dict, 
-#                                         dtype=self._get_dtype(), 
-#                                         chunksize=(self.h5_chunksize << 4))
-#            # store coverage statistics to allow calculations
-#            refstats = intervalcoviter.stats
-#            refstats.tohdf(arr)
-#            bamstats.update(refstats)
-#            logging.debug("\tProcessed '%d' valid reads" % (refstats.num_reads))
-#            logging.debug("\tTotal coverage '%f'" % (refstats.total_cov))
-#        # store parameters used tabulate coverage
-#        self.hdf_group._v_attrs[NORM_RLEN_ATTR] = norm_rlen
-#        # store statistics
-#        bamstats.tohdf(self.hdf_group)
-#        self.stats = bamstats
 

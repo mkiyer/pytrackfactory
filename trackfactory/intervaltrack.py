@@ -33,13 +33,13 @@ import numpy as np
 import tables
 
 from track import Track, TrackError, parse_interval
-import lib.npintervaltree as intervaltree
+from lib.IntervalTree import IntervalTree
 
 REF_COL_NAME = "ref"
 START_COL_NAME = "start"
 END_COL_NAME = "end"
 ID_COL_NAME = "id"
-INTERVAL_DATA_TABLE = "interval_data"
+INTERVAL_TABLE = "interval_data"
 INTERVAL_INDEX_GROUP = "interval_trees"
 ROW_ATTR = 'row'
 ROOT_ID_ATTR = 'root_id'
@@ -81,52 +81,99 @@ class IntervalTrack(Track):
     h5_chunksize = 1<<18 # 256kb chunks
 
     class _Index(object):
-        def __init__(self, tree=None, root_id=0, dirty=True):
+        def __init__(self, tree=None, dirty=False):
             self.tree = tree
-            self.root_id = root_id
             self.dirty = dirty
 
-    def __init__(self, hdf_group, dtype=None, length=None):        
+    def __init__(self, hdf_group, dtype=None, expectedrows=None):        
         super(IntervalTrack, self).__init__(hdf_group)
-        if not INTERVAL_DATA_TABLE in self.hdf_group:
+        if not INTERVAL_TABLE in self.hdf_group:
             if dtype is None:
                 dtype = np.dtype(get_base_dtype_fields())
-            self._init_interval_table(dtype, length)
-        self._init_trees()
+            self._init_table(dtype, expectedrows)
+        self._init_index()
+
+    def _init_table(self, dtype, expectedrows):
+        if expectedrows is None:
+            expectedrows = self.h5_expectedrows
+        # create interval table
+        h5file = self._get_hdf_file()
+        h5file.createTable(self.hdf_group, 
+                           name=INTERVAL_TABLE, 
+                           description=dtype,
+                           filters=self.h5_filters,
+                           expectedrows=expectedrows)
+
+    def _init_index(self):
+        if not INTERVAL_INDEX_GROUP in self.hdf_group:
+            h5file = self._get_hdf_file()
+            h5file.createGroup(self.hdf_group, INTERVAL_INDEX_GROUP)
+        parentgroup = self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)
+        self.indexes = {}
+        for rname in self.get_rnames():
+            idx = self._Index()
+            # load index if it exists
+            if rname in parentgroup:
+                tree = IntervalTree.fromhdf(parentgroup._f_getChild(rname))
+                idx.tree = tree
+            self.indexes[rname] = idx
+
+    def _get_ref_count_dict(self):
+        refdict = collections.defaultdict(lambda: 0)
+        for row in self.hdf_group._f_getChild(INTERVAL_TABLE):
+            refdict[row[REF_COL_NAME]] += 1
+        return refdict
+    
+    def index(self, persist=True):
+        """(re)builds the interval tree index into the interval list you
+        have stored.
+        
+        .. note: interval tree performance will not be obtained unless 
+        the user *explicitly* calls this method.  This is typically 
+        called after a set of intervals has been added.
+        
+        :param persist: permanently store the index on disk
+        :type persist: bool
+        """
+        refcountdict = None
+        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
+        tree_group = self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)
+        for rname, idx in self.indexes.iteritems():
+            # see if index needs to be generated
+            if (idx.tree is None) or idx.dirty:
+                # count number of items for each reference
+                if refcountdict is None:
+                    refcountdict = self._get_ref_count_dict()
+                # iterate and insert all intervals
+                tree = IntervalTree(refcountdict[rname])            
+                cur_id = 1
+                for row in tbl.where('ref == rname'):
+                    start = row[START_COL_NAME]
+                    end = row[END_COL_NAME]
+                    tree.insert(cur_id, start, end, row.nrow)
+                    cur_id += 1
+                # update index
+                idx.tree = tree
+                idx.dirty = False
+            # save for future use
+            if persist:
+                tree.tohdf(tree_group, rname)
+
+    def _get_tree(self, rname):
+        return self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)._f_getChild(rname)
 
     def __getitem__(self, key):
         ref, start, end = parse_interval(key)
         return self.intersect(ref, start, end)
 
     def __iter__(self):
-        for row in self.hdf_group[INTERVAL_DATA_TABLE]:
+        for row in self.hdf_group[INTERVAL_TABLE]:
             yield row
 
     def _get_num_intervals(self):
-        return self.hdf_group._f_getChild(INTERVAL_DATA_TABLE).nrows
-    num_intervals = property(_get_num_intervals, None, None, "get number of intervals in track")
-
-    def _init_interval_table(self, dtype, length):
-        if length is None:
-            length = self.h5_expectedrows
-        # create interval table
-        h5file = self._get_hdf_file()
-        h5file.createTable(self.hdf_group, 
-                           name=INTERVAL_DATA_TABLE, 
-                           description=dtype,
-                           filters=self.h5_filters,
-                           expectedrows=length)
-
-    def _init_trees(self):
-        h5file = self._get_hdf_file()
-        if not INTERVAL_INDEX_GROUP in self.hdf_group:            
-            h5file.createGroup(self.hdf_group, INTERVAL_INDEX_GROUP)
-        self.tree_indexes = {}
-        for rname in self.get_rnames():
-            self.tree_indexes[rname] = self._load_index(rname)
-    
-    def _get_tree(self, rname):
-        return self.hdf_group.interval_trees._f_getChild(rname)
+        return self.hdf_group._f_getChild(INTERVAL_TABLE).nrows
+    num_intervals = property(_get_num_intervals, None, None, 
+                             "get number of intervals in track")
     
     def add(self, value):
         """add an interval to the track
@@ -171,7 +218,7 @@ class IntervalTrack(Track):
         else:
             getfunc = lambda a: getattr(value, a)
         # add interval to intervals table
-        tbl = self.hdf_group._f_getChild(INTERVAL_DATA_TABLE)
+        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
         row = tbl.row
         # assign interval a unique primary key
         for colname in tbl.colnames:
@@ -179,108 +226,59 @@ class IntervalTrack(Track):
         row.append()
         tbl.flush()
         # set index to dirty
-        rname = getfunc(REF_COL_NAME)    
-        self.tree_indexes[rname].dirty = True
-
-    def _save_index(self, ref, tree, root_id):
-        h5file = self._get_hdf_file()
-        parentgroup = self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)
-        if not ref in parentgroup:
-            tbl = h5file.createTable(parentgroup, ref, tree)
-            tbl.attrs[ROOT_ID_ATTR] = root_id
-
-    def _load_index(self, ref):
-        parentgroup = self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)
-        if not ref in parentgroup:
-            return self._Index()
-        tbl = self._get_tree(ref)
-        tree = tbl.read()
-        root_id = tbl.attrs[ROOT_ID_ATTR]
-        return self._Index(tree, root_id, False)
-
-    def _get_ref_count_dict(self):
-        refdict = collections.defaultdict(lambda: 0)
-        for row in self.hdf_group._f_getChild(INTERVAL_DATA_TABLE):
-            refdict[row[REF_COL_NAME]] += 1
-        return refdict
-
-    def _create_index(self, myref, nrows):                      
-        # create index from scratch
-        tbl = self.hdf_group._f_getChild(INTERVAL_DATA_TABLE)
-        tree, root_id = intervaltree.init_tree(nrows)
-        # iterate and insert all intervals
-        cur_id = 1
-        for row in tbl.where('ref == myref'):
-            start = row[START_COL_NAME]
-            end = row[END_COL_NAME]
-            root_id = intervaltree.insert(tree, root_id, cur_id, start, end, row.nrow)
-            cur_id += 1
-        idx = self._Index(tree, root_id, False)
-        return idx
-    
-    def index(self, persist=True):
-        """(re)builds the interval tree index into the interval list you
-        have stored.
-        
-        .. note: interval tree performance will not be obtained unless the user *explicitly* calls this method.  This is typically called after a set of intervals has been added.
-        
-        :param persist: permanently store the index on disk
-        :type persist: bool
-        """
-        refcountdict = None
-        for rname in self.get_rnames():
-            # see if in-memory index exists
-            idx = self.tree_indexes[rname]
-            if (idx.tree is None) or idx.dirty:
-                # count number of items for each reference
-                if refcountdict is None:
-                    refcountdict = self._get_ref_count_dict()
-                # create index from scratch
-                idx = self._create_index(rname, refcountdict[rname])
-                # save for future use
-                if persist:
-                    self._save_index(rname, idx.tree, idx.root_id)
-                self.tree_indexes[rname] = idx
+        rname = getfunc(REF_COL_NAME)
+        self.indexes[rname].dirty = True  
 
     def intersect(self, rname, start, end):
         """Finds all intervals that have at least 1-bp of overlap
         with the interval provided
         """
-        tbl = self.hdf_group._f_getChild(INTERVAL_DATA_TABLE)
-        idx = self.tree_indexes[rname]
+        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
+        idx = self.indexes[rname]
         if (idx.tree is None) or idx.dirty:
-            hits = [r.fetch_all_fields() for r in tbl.where('((ref == myref) & (start < myend) & (end > mystart))', {'myref': rname, 'mystart': start, 'myend': end})]
-            return hits
+            expr = '((ref == myref) & (start < myend) & (end > mystart))'
+            mappings = {'myref': rname, 'mystart': start, 'myend': end}
+            hits = [r.fetch_all_fields() for r in tbl.where(expr, mappings)]
         else:
-            row_ids = intervaltree.intersect(idx.tree, idx.root_id, start, end)
-            return tbl[row_ids]
+            row_ids = idx.tree.intersect(start, end)
+            hits = tbl[row_ids]
+        return hits
 
     def before(self, ref, position, num_intervals=1, max_dist=2500):
         """Find `num_intervals` intervals that lie before `position` and 
         are no further than `max_dist` distance away
         """
         tbl = self.hdf_group.interval_data
-        idx = self.tree_indexes[ref]
+        idx = self.indexes[ref]
         if (idx.tree is None) or idx.dirty:
-            results = [(r['end'],r['id']) for r in tbl.where('((ref == myref) & (end <= position) & (position < end + max_dist))', {'myref': ref, 'position': position, 'max_dist': max_dist})]
+            expr = ('((ref == myref) & (end <= position) & '
+                    '(position < end + max_dist))')
+            mappings = {'myref': ref, 'position': position, 'max_dist': max_dist}
+            results = [(r['end'],r['id']) for r in tbl.where(expr, mappings)]
             results.sort(key=operator.itemgetter(0), reverse=True)
             row_ids = [x[1] for x in results[:num_intervals]]
-            return tbl[row_ids]           
+            hits = tbl[row_ids]           
         else:
-            row_ids = intervaltree.left(idx.tree, idx.root_id, position, num_intervals, max_dist)
-            return tbl[row_ids]
+            row_ids = idx.tree.left(position, num_intervals, max_dist)
+            hits = tbl[row_ids]
+        return hits
 
     def after(self, ref, position, num_intervals=1, max_dist=2500):
         """Find `num_intervals` intervals that lie after `position` and are 
         no further than `max_dist` distance away
         """
         tbl = self.hdf_group.interval_data
-        idx = self.tree_indexes[ref]
+        idx = self.indexes[ref]
         if (idx.tree is None) or idx.dirty:
-            results = [(r['start'],r['id']) for r in tbl.where('((ref == myref) & (position < start) & (start <= (position + max_dist)))', {'myref': ref, 'position': position, 'max_dist': max_dist})]
+            expr = ('((ref == myref) & (position < start) & '
+                    '(start <= (position + max_dist)))')
+            mappings = {'myref': ref, 'position': position, 'max_dist': max_dist}
+            results = [(r['start'],r['id']) for r in tbl.where(expr, mappings)]
             results.sort(key=operator.itemgetter(0))
             row_ids = [x[1] for x in results[:num_intervals]]
-            return tbl[row_ids]
+            hits = tbl[row_ids]
         else:
-            row_ids = intervaltree.right(idx.tree, idx.root_id, position, num_intervals, max_dist)
-            return tbl[row_ids]
+            row_ids = idx.tree.right(position, num_intervals, max_dist)
+            hits = tbl[row_ids]
+        return hits
+
