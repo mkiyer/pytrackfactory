@@ -14,11 +14,13 @@ import pysam
 from trackfactory.track import get_refs_from_sam, get_refs_from_bam, \
     get_refs_from_bowtie_index, parse_interval
 
-from trackfactory.io.cwiggle import WiggleReader 
+from trackfactory.io.cwiggle import WiggleReader
+from trackfactory.io.bed import parse_bed6
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
 from trackfactory.coveragetrack import CoverageTrack
+from trackfactory.intervaltrack import IntervalTrack, get_bed_dtype_fields
 
 ACTION_CREATE = "create"
 ACTION_ADD = "add"
@@ -75,12 +77,23 @@ def remove_track(parser, options):
     logging.info("removed track '%s' from trackfactory '%s'" %
                  (options.name, options.file))
 
-def add_sequence_track(parser, options):
+def open_trackfactory(parser, options):
     tf = TrackFactory(options.file, "r+")
     if tf.has_track(options.name):
         tf.close()
         parser.error("trackfactory '%s' already has track named '%s'" %
                      (options.file, options.name))
+    return tf
+
+def check_datafile(parser, options):
+    if options.data_file is not None:
+        if not os.path.isfile(options.data_file):
+            parser.error("data file '%s' not found or not a regular file" % 
+                         (options.data_file))
+    return options.data_file
+    
+def add_sequence_track(parser, options):
+    tf = open_trackfactory(parser, options)
     t = tf.create_track(options.name, SequenceTrack, options.bpb)
     logging.info("added SequenceTrack %s to trackfactory %s" %
                  (options.name, options.file))
@@ -90,47 +103,26 @@ def add_sequence_track(parser, options):
     tf.close()
 
 def add_array_track(parser, options):
-    tf = TrackFactory(options.file, "r+")
-    if tf.has_track(options.name):
-        tf.close()
-        parser.error("trackfactory '%s' already has track named '%s'" %
-                     (options.file, options.name))
+    tf = open_trackfactory(parser, options)
     t = tf.create_track(options.name, ArrayTrack, np.dtype(options.dtype))
     logging.info("added %s %s to trackfactory %s" %
                  (ArrayTrack.__name__, options.name, options.file))
-    if options.data_file is not None:
-        if not os.path.isfile(options.data_file):
-            parser.error("data file '%s' not found or not a regular file" % 
-                         (options.data_file))
+    datafile = check_datafile(parser, options)
+    if datafile is not None:
         logging.info("inserting data file %s (type=%s)" % 
                      (options.data_file, options.file_type))
         if options.file_type == "wiggle":
             # add wiggle file
             t.fromintervals(WiggleReader(open(options.data_file)))
-        elif options.file_type == "bam":
-            # add BAM file
-            bamfh = pysam.Samfile(options.data_file, "rb")
-            t.frombam(bamfh, 
-                      options.bam_rlen,
-                      options.bam_nh,
-                      options.bam_prob,
-                      options.bam_max_multihits)
-            bamfh.close()
     tf.close()
 
 def add_coverage_track(parser, options):
-    tf = TrackFactory(options.file, "r+")
-    if tf.has_track(options.name):
-        tf.close()
-        parser.error("trackfactory '%s' already has track named '%s'" %
-                     (options.file, options.name))
+    tf = open_trackfactory(parser, options)
     t = tf.create_track(options.name, CoverageTrack)
     logging.info("added %s %s to trackfactory %s" %
                  (CoverageTrack.__name__, options.name, options.file))
-    if options.data_file is not None:
-        if not os.path.isfile(options.data_file):
-            parser.error("data file '%s' not found or not a regular file" % 
-                         (options.data_file))
+    datafile = check_datafile(parser, options)
+    if datafile is not None:
         logging.info("inserting data file %s (type=%s)" % 
                      (options.data_file, options.file_type))
         if options.file_type == "bam":
@@ -145,6 +137,21 @@ def add_coverage_track(parser, options):
             bamfh.close()
     tf.close()
 
+def add_interval_track(parser, options):
+    tf = open_trackfactory(parser, options)
+    datafile = check_datafile(parser, options)
+    if options.file_type == "bed":
+        dtype = np.dtype(get_bed_dtype_fields())
+        t = tf.create_track(options.name, IntervalTrack, 
+                            dtype=dtype)
+        if datafile is not None:
+            logging.info("inserting data file %s (type=%s)" % 
+                         (options.data_file, options.file_type))
+            t.fromintervals(parse_bed6(open(options.data_file)),
+                            index=True)
+    logging.info("added %s %s to trackfactory %s" %
+                 (IntervalTrack.__name__, options.name, options.file))
+    tf.close()
 
 def view_track(parser, options):
     tf = TrackFactory(options.file, "r")
@@ -278,10 +285,6 @@ def main():
     parser_cov.add_argument("--nodup", dest="keep_dup", 
                             action="store_const", const=False, 
                             help="(BAM) count duplicate reads")
-    parser_cov.add_argument("--keepdup", dest="keep_dup", 
-                            default=None,
-                            help="(BAM) count duplicate reads")
-
     parser_cov.add_argument("--bam-nh-tag", dest="bam_nh", default=None,
                             help="(BAM) tag containing number of hits per "
                             "read for use in calculate multimapping coverage")
@@ -294,7 +297,20 @@ def main():
                             "insert into track")
     parser_cov.set_defaults(func=add_coverage_track,
                             file_type="bam",
-                            keep_dup=True)
+                            keepdup=True)
+    #
+    # add an IntervalTrack
+    #
+    subparser = addsubparsers.add_parser(IntervalTrack.__name__,
+                                         help='interval track')
+    subparser.add_argument("--bed", dest="file_type",
+                           action="store_const", const="bed",
+                           help="data file is in UCSC BED format")
+    subparser.add_argument("data_file", default=None,
+                           help="(optional) file containing data to "
+                           "insert into track")    
+    subparser.set_defaults(func=add_interval_track,
+                           file_type="bed")
     #
     # create parser for "view" command
     #
