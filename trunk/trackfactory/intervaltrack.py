@@ -33,16 +33,17 @@ import numpy as np
 import tables
 
 from track import Track, TrackError, parse_interval
-from lib.IntervalTree import IntervalTree
+from lib.intervaltree import IntervalTree
 
 REF_COL_NAME = "ref"
 START_COL_NAME = "start"
 END_COL_NAME = "end"
-ID_COL_NAME = "id"
+
 INTERVAL_TABLE = "interval_data"
 INTERVAL_INDEX_GROUP = "interval_trees"
 ROW_ATTR = 'row'
 ROOT_ID_ATTR = 'root_id'
+DTYPE_ATTR = 'dtype'
 
 def get_base_dtype_fields():
     '''Get field names and numpy types for fields *required* to support the 
@@ -51,8 +52,14 @@ def get_base_dtype_fields():
     '''    
     return [(REF_COL_NAME, 'a32'),
             (START_COL_NAME, '<i4'),
-            (END_COL_NAME, '<i4'),
-            (ID_COL_NAME, '<u4')]
+            (END_COL_NAME, '<i4')]
+    
+def get_bed_dtype_fields():
+    fields = get_base_dtype_fields()
+    fields.extend([("name", "a31"),
+                   ("strand", 'a1'),
+                   ("score", np.int)])
+    return fields
 
 class IntervalTrack(Track):
     '''Associates genomic intervals with custom metadata. This is a base 
@@ -91,7 +98,11 @@ class IntervalTrack(Track):
             if dtype is None:
                 dtype = np.dtype(get_base_dtype_fields())
             self._init_table(dtype, expectedrows)
+            hdf_group._v_attrs[DTYPE_ATTR] = np.dtype(dtype)            
         self._init_index()
+
+    def _get_dtype(self):
+        return self.hdf_group._v_attrs[DTYPE_ATTR]
 
     def _init_table(self, dtype, expectedrows):
         if expectedrows is None:
@@ -158,10 +169,7 @@ class IntervalTrack(Track):
             # save for future use
             if persist:
                 tree.tohdf(tree_group, rname)
-
-    def _get_tree(self, rname):
-        return self.hdf_group._f_getChild(INTERVAL_INDEX_GROUP)._f_getChild(rname)
-
+    
     def __getitem__(self, key):
         ref, start, end = parse_interval(key)
         return self.intersect(ref, start, end)
@@ -174,60 +182,6 @@ class IntervalTrack(Track):
         return self.hdf_group._f_getChild(INTERVAL_TABLE).nrows
     num_intervals = property(_get_num_intervals, None, None, 
                              "get number of intervals in track")
-    
-    def add(self, value):
-        """add an interval to the track
-        
-        :param value: interval and metadata to add
-        :type value: `numpy.void`, dictionary, or object types accepted
-        
-        Example::
-          # create a dummy track
-          import pytrackfactory as ptf
-          tf = ptf.TrackFactory("foo.tf", "w", refs=(("chr1", 10000)))          
-          t = tf.create_track("a", IntervalTrack, length=10)
-          
-          # add via dictionary
-          t.add({'ref': 'chr1', 'start': 0, 'end': 1000, 'id': 100})
-          
-          # add via numpy void type
-          import numpy as np        
-          rec = np.zeros(1, dtype=get_base_dtype_fields())[0]        
-          rec['ref'] = 'chr1'        
-          rec['start'] = 0        
-          rec['end'] = 1000        
-          rec['id'] = 100        
-          t.add(rec)
-
-          # add via user-defined class        
-          class MyInterval(object):        
-              def __init__(self, ref, start, end, id):        
-                  self.ref = None
-                  self.start = 0
-                  self.end = 0
-                  self.id = 0        
-          x = MyInterval('chr1', 0, 1000, 100)
-          t.add(x)
-        
-        Note that in all three cases, the attributes or fields *ref*, 
-        *start*, *end*, and *id* were required.
-        """
-        if (isinstance(value, np.void) or 
-            isinstance(value, dict)):
-            getfunc = value.__getitem__            
-        else:
-            getfunc = lambda a: getattr(value, a)
-        # add interval to intervals table
-        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
-        row = tbl.row
-        # assign interval a unique primary key
-        for colname in tbl.colnames:
-            row[colname] = getfunc(colname)
-        row.append()
-        tbl.flush()
-        # set index to dirty
-        rname = getfunc(REF_COL_NAME)
-        self.indexes[rname].dirty = True  
 
     def intersect(self, rname, start, end):
         """Finds all intervals that have at least 1-bp of overlap
@@ -282,3 +236,69 @@ class IntervalTrack(Track):
             hits = tbl[row_ids]
         return hits
 
+    def add(self, value):
+        """add an interval to the track
+        
+        :param value: interval and metadata to add
+        :type value: `numpy.void`, dictionary, or object types accepted
+        
+        Example::
+          # create a dummy track
+          import pytrackfactory as ptf
+          tf = ptf.TrackFactory("foo.tf", "w", refs=(("chr1", 10000)))          
+          t = tf.create_track("a", IntervalTrack, length=10)
+          
+          # add via dictionary
+          t.add({'ref': 'chr1', 'start': 0, 'end': 1000, 'id': 100})
+          
+          # add via numpy void type
+          import numpy as np        
+          rec = np.zeros(1, dtype=get_base_dtype_fields())[0]        
+          rec['ref'] = 'chr1'        
+          rec['start'] = 0        
+          rec['end'] = 1000        
+          rec['id'] = 100        
+          t.add(rec)
+
+          # add via user-defined class        
+          class MyInterval(object):        
+              def __init__(self, ref, start, end, id):        
+                  self.ref = None
+                  self.start = 0
+                  self.end = 0
+                  self.id = 0        
+          x = MyInterval('chr1', 0, 1000, 100)
+          t.add(x)
+        
+        Note that in all three cases, the attributes or fields *ref*, 
+        *start*, *end*, and *id* were required.
+        """
+        if (isinstance(value, np.void) or 
+            isinstance(value, dict)):
+            getfunc = value.__getitem__            
+        else:
+            getfunc = lambda a: getattr(value, a)
+        # add interval to intervals table
+        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
+        row = tbl.row
+        for colname in tbl.colnames:
+            row[colname] = getfunc(colname)
+        row.append()
+        tbl.flush()
+        # set index to dirty
+        rname = getfunc(REF_COL_NAME)
+        self.indexes[rname].dirty = True  
+
+    def fromintervals(self, interval_iter, index=True):
+        tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
+        fields = self._get_dtype().names
+        row = tbl.row
+        debug = 0
+        for interval in interval_iter:
+            for i,colname in enumerate(fields):
+                row[colname] = interval[i]
+            debug += 1
+            row.append()
+        tbl.flush()
+        if index:
+            self.index(persist=True)
