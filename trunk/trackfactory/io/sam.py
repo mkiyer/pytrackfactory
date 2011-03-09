@@ -5,6 +5,7 @@ Created on Mar 6, 2011
 '''
 import array
 import collections
+import operator
 
 CIGAR_M = 0 #match  Alignment match (can be a sequence match or mismatch)
 CIGAR_I = 1 #insertion  Insertion to the reference
@@ -44,11 +45,44 @@ def get_genomic_intervals(read):
     return intervals
 
 class BamCoverageStatistics:
+    NUM_READS_ATTR = "num_reads"
+    TOTAL_COV_ATTR = "total_cov"
+    RLEN_ATTR = "rlen"
+    RLEN_DIST_ATTR = "rlen_dist"
+    
     def __init__(self):
         self.num_reads = 0
         self.total_cov = 0.0
-        self.read_lengths = collections.defaultdict(lambda: 0.0)
-        
+        self.rlen_dict = collections.defaultdict(lambda: 0.0)
+    
+    def update(self, other):
+        self.num_reads += other.num_reads
+        self.total_cov += other.total_cov
+        for rlen in other.rlen_dict:
+            if rlen not in self.rlen_dict:
+                self.rlen_dict[rlen] = 0
+            self.rlen_dict[rlen] += other.rlen_dict[rlen]
+
+    def fromhdf(self, hdf_group):
+        if self.NUM_READS_ATTR not in hdf_group._v_attrs:
+            return
+        self.num_reads = hdf_group._v_attrs[self.NUM_READS_ATTR]
+        self.total_cov = hdf_group._v_attrs[self.TOTAL_COV_ATTR]
+        rlen_dict = hdf_group._v_attrs[self.RLEN_DIST_ATTR]
+        for rlen in rlen_dict:
+            self.rlen_dict[rlen] += rlen_dict[rlen]    
+        # most common read length
+        rlen = int(sorted(self.rlen_dict.items(), 
+                          key=operator.itemgetter(1), 
+                          reverse=True)[0][0])
+        self.read_length = rlen
+
+    def tohdf(self, hdf_group):
+        hdf_group._v_attrs[self.NUM_READS_ATTR] = self.num_reads
+        hdf_group._v_attrs[self.TOTAL_COV_ATTR] = self.total_cov
+        hdf_group._v_attrs[self.RLEN_DIST_ATTR] = dict(self.rlen_dict) 
+
+    
     
 class BamCoverageIterator:
     """
@@ -69,7 +103,7 @@ class BamCoverageIterator:
         self.max_multimaps = max_multimaps
         self.keep_dup = keep_dup
         self.keep_qcfail = keep_qcfail
-        self.stats = BamCoverageStatistics()
+        self.stats = BamCoverageStatistics()        
         self.intervals = []
         self.done = False
 
@@ -107,7 +141,7 @@ class BamCoverageIterator:
                     continue
                 cov /= nh
             self.stats.num_reads += 1
-            self.stats.read_lengths[read.rlen] += 1
+            self.stats.rlen_dict[read.rlen] += 1
             # find genomic intervals of read alignment
             for start, end, seq in get_genomic_intervals(read):
                 #print 'START', start, 'END', end, 'SEQ', seq        
@@ -115,4 +149,4 @@ class BamCoverageIterator:
                     cov /= (end - start)
                 #print start, end, read.is_reverse, cov, seq
                 self.stats.total_cov += (end - start) * cov                
-                self.intervals.append((start, end, read.is_reverse, cov, seq))
+                self.intervals.append((read.tid, start, end, read.is_reverse, cov, seq))
