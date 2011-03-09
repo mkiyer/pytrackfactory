@@ -72,33 +72,47 @@ class CoverageTrack(ArrayTrack):
                 keep_qcfail=True):
         rname_array_dict = self._get_arrays()
         # keep aggregated statistics
-        bamstats = BamCoverageStatistics()
-        for rname in self.get_rnames():
-            if rname not in bamfh.references:
-                logging.debug("Reference %s not found in BAM header" % (rname))
-                continue
-            logging.debug("Adding ref '%s'" % (rname))            
-            intervalcoviter = BamCoverageIterator(bamfh.fetch(rname),
-                                                  norm_rlen, 
-                                                  num_hits_tag,
-                                                  hit_prob_tag,
-                                                  max_multimaps=max_multimaps, 
-                                                  keep_dup=keep_dup,
-                                                  keep_qcfail=keep_qcfail)
-            arr = self._get_array(rname)
-            write_interval_data_to_array(intervalcoviter, 
-                                         rname_array_dict, 
-                                         dtype=self._get_dtype(), 
-                                         chunksize=(self.h5_chunksize << 4))
-            # store coverage statistics to allow calculations
-            refstats = intervalcoviter.stats
-            refstats.tohdf(arr)
-            bamstats.update(refstats)
-            logging.debug("\tProcessed '%d' valid reads" % (refstats.num_reads))
-            logging.debug("\tTotal coverage '%f'" % (refstats.total_cov))
+        intervalcoviter = BamCoverageIterator(bamfh,
+                                              norm_rlen, 
+                                              num_hits_tag,
+                                              hit_prob_tag,
+                                              max_multimaps=max_multimaps, 
+                                              keep_dup=keep_dup,
+                                              keep_qcfail=keep_qcfail)
+        write_interval_data_to_array(intervalcoviter, 
+                                     rname_array_dict, 
+                                     dtype=self._get_dtype(), 
+                                     chunksize=(self.h5_chunksize << 4))
+        # store coverage statistics to allow calculations
+        self.stats = intervalcoviter.stats
+        logging.debug("\tProcessed '%d' valid reads" % (self.stats.num_reads))
+        logging.debug("\tTotal coverage '%f'" % (self.stats.total_cov))
         # store parameters used tabulate coverage
         self.hdf_group._v_attrs[NORM_RLEN_ATTR] = norm_rlen
         # store statistics
-        bamstats.tohdf(self.hdf_group)
-        self.stats = bamstats
+        self.stats.tohdf(self.hdf_group)
+#
+#        self.stats = bamstats
+#        
+#        for rname in self.get_rnames():
+#            if rname not in bamfh.references:
+#                logging.debug("Reference %s not found in BAM header" % (rname))
+#                continue
+#            logging.debug("Adding ref '%s'" % (rname))            
+#            arr = self._get_array(rname)
+#            write_interval_data_to_array(intervalcoviter, 
+#                                         rname_array_dict, 
+#                                         dtype=self._get_dtype(), 
+#                                         chunksize=(self.h5_chunksize << 4))
+#            # store coverage statistics to allow calculations
+#            refstats = intervalcoviter.stats
+#            refstats.tohdf(arr)
+#            bamstats.update(refstats)
+#            logging.debug("\tProcessed '%d' valid reads" % (refstats.num_reads))
+#            logging.debug("\tTotal coverage '%f'" % (refstats.total_cov))
+#        # store parameters used tabulate coverage
+#        self.hdf_group._v_attrs[NORM_RLEN_ATTR] = norm_rlen
+#        # store statistics
+#        bamstats.tohdf(self.hdf_group)
+#        self.stats = bamstats
 

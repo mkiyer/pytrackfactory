@@ -92,11 +92,12 @@ class BamCoverageIterator:
     :param keep_dup: whether to omit duplicate reads
     :param ignore qcfail: whether to consider marked as QC fail
     """
-    def __init__(self, read_iterator, norm_rlen=False, 
+    def __init__(self, bamfh, norm_rlen=False, 
                  num_hits_tag=None, hit_prob_tag=None,
                  max_multimaps=None, keep_dup=True,
                  keep_qcfail=True):
-        self.read_iterator = read_iterator
+        self.bamfh = bamfh
+        self.read_iterator = bamfh.fetch()
         self.norm_rlen = norm_rlen
         self.num_hits_tag = num_hits_tag
         self.hit_prob_tag = hit_prob_tag
@@ -142,6 +143,8 @@ class BamCoverageIterator:
                 cov /= nh
             self.stats.num_reads += 1
             self.stats.rlen_dict[read.rlen] += 1
+            # get reference name
+            rname = self.bamfh.getrname(read.tid)
             # find genomic intervals of read alignment
             for start, end, seq in get_genomic_intervals(read):
                 #print 'START', start, 'END', end, 'SEQ', seq        
@@ -149,4 +152,4 @@ class BamCoverageIterator:
                     cov /= (end - start)
                 #print start, end, read.is_reverse, cov, seq
                 self.stats.total_cov += (end - start) * cov                
-                self.intervals.append((read.tid, start, end, read.is_reverse, cov, seq))
+                self.intervals.append((rname, start, end, read.is_reverse, cov, seq))
