@@ -13,25 +13,22 @@ import os
 import collections
 import numpy as np
 
-from pytrackfactory.track import TrackError
-from pytrackfactory.trackfactory import TrackFactory
-from pytrackfactory.intervaltrack import IntervalTrack, get_base_dtype_fields
+from trackfactory.track import TrackError
+from trackfactory.trackfactory import TrackFactory
+from trackfactory.intervaltrack import IntervalTrack, get_base_dtype_fields
 
 def mktemp(prefix, suffix):
     fh, filename = tempfile.mkstemp(suffix=suffix, prefix=prefix)
     os.close(fh)
     return filename
 
-class TestReferences(unittest.TestCase):
-    def setUp(self):
-        filename = mktemp(prefix="tmp", suffix=".h5")
-        self.filename = filename
-
-    def tearDown(self):
-        if os.path.exists(self.filename):
-            os.remove(self.filename)
-
-Interval = collections.namedtuple("Interval", ('ref', 'start', 'end', 'id'))
+class Interval(object):
+    __slots__ = ('ref', 'start', 'end', 'id')
+    def __init__(self, ref, start, end, id):
+        self.ref = ref
+        self.start = start
+        self.end = end
+        self.id = id
 
 class TestIntervalTrack(unittest.TestCase):
 
@@ -176,13 +173,6 @@ class TestIntervalTrack(unittest.TestCase):
         self.assertTrue(set(ids) == set(range(1, 10, 2)))
 
     def testAdd(self):
-        class Interval(object):
-            __slots__ = ('ref', 'start', 'end', 'id')
-            def __init__(self, ref, start, end, id):
-                self.ref = ref
-                self.start = start
-                self.end = end
-                self.id = id
         mytrack = self.tf.create_track('intervals', IntervalTrack)
         interval_dtype = get_base_dtype_fields()
         myrow = np.zeros(1, dtype=interval_dtype)[0]

@@ -157,7 +157,10 @@ def view_track(parser, options):
     track_type = t.get_type()
     logging.debug("opened track '%s' type '%s'" % (options.name, track_type))        
     if track_type == CoverageTrack.__name__:
-        t.tobedgraph(region, sys.stdout)
+        if options.format == "bedgraph":
+            t.tobedgraph(region, sys.stdout)
+        else:
+            print t[region]
     else:
         print t[region]
     logging.debug("done")

@@ -8,8 +8,7 @@ import itertools
 import numpy as np
 
 from trackfactory.io.sequence import parse_fasta_as_chunks
-from trackfactory.io.intervals import intervals_to_array
-from trackfactory.io.cintervals import IntervalToArrayChunks
+from trackfactory.io.interval import write_interval_data_to_array
 
 class TestIO(unittest.TestCase):
 
@@ -68,13 +67,13 @@ class TestIO(unittest.TestCase):
                 fullarr[start:start+intervalsize] = val
                 val += 2
             # test different chunk sizes
-            testarr = np.zeros(endpos+intervalsize, dtype=dtype)
             for chunksize in xrange(chunkstep, endpos, chunkstep):
-                for chrom, start, end, arr in intervals_to_array(iter(intervals), "i", chunksize):
-                    #print chrom, start, end, arr, fullarr[start:end]
-                    testarr[start:end] = arr                    
-                    self.assertTrue(np.all(arr == fullarr[start:end]))
-            self.assertTrue(np.all(testarr == fullarr))   
+                testarr = np.zeros(endpos+intervalsize, dtype=dtype)
+                write_interval_data_to_array(iter(intervals), 
+                                             {"chr1": testarr}, 
+                                             dtype=dtype, 
+                                             chunksize=chunksize)
+                self.assertTrue(np.all(testarr == fullarr))   
         #
         # test intervals on different chromosomes
         #
@@ -94,73 +93,72 @@ class TestIO(unittest.TestCase):
                 fullarr[ref][start:start+intervalsize] = val
                 val += 2
             # test different chunk sizes
-            testarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}
             for chunksize in (1, 8, 16, 32, 64, 128, 256, 512, 1024):
-                #print "chunksize", chunksize
-                for chrom, start, end, arr in intervals_to_array(iter(intervals), "i", chunksize):
-                    #print chrom, start, end, arr, fullarr[chrom][start:end]
-                    testarr[chrom][start:end] = arr                    
-                    self.assertTrue(np.all(arr == fullarr[chrom][start:end]))
-            for chrom in testarr:
-                self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))
+                testarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
+                           "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
+                           "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}
+                write_interval_data_to_array(iter(intervals),
+                                             testarr, 
+                                             dtype=dtype, 
+                                             chunksize=chunksize)
+                for chrom in testarr:
+                    self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))
 
-    def test_cinterval_to_array(self):        
-        """Testing interval to array code"""
-        ref = "chr1"        
-        endpos = 1000        
-        chunkstep = 10
-        dtype = "i"
-        # test different interval sizes
-        for intervalsize in xrange(1,100,10):
-            fullarr = np.zeros(endpos+intervalsize, dtype=dtype)
-            intervals = []
-            val = 0
-            for start in xrange(0, endpos, intervalsize):
-                intervals.append((ref, start, start+intervalsize, "+", val))
-                fullarr[start:start+intervalsize] = val
-                val += 2
-            # test different chunk sizes
-            testarr = np.zeros(endpos+intervalsize, dtype=dtype)
-            for chunksize in xrange(chunkstep, endpos, chunkstep):
-                buf = np.zeros(chunksize, dtype="i")
-                array_iter = IntervalToArrayChunks(iter(intervals), buf)
-                for chrom, start, end, arr in array_iter:
-                    #print chrom, start, end, arr, fullarr[start:end]
-                    testarr[start:end] = arr
-                    self.assertTrue(np.all(arr == fullarr[start:end]))
-            self.assertTrue(np.all(testarr == fullarr))
-        # test intervals on different chromosomes
-        refiter = itertools.cycle(itertools.chain(itertools.repeat("chr1", 3),
-                                                  itertools.repeat("chr2", 3) ,                                       
-                                                  itertools.repeat("chr3", 3)))                                        
-        for intervalsize in (1,10,50,100):
-            #print "intervalsize", intervalsize
-            fullarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}                       
-            intervals = []
-            val = 0
-            for start in xrange(0, endpos, intervalsize):
-                ref = refiter.next()
-                intervals.append((ref, start, start+intervalsize, "+", val))
-                fullarr[ref][start:start+intervalsize] = val
-                val += 2
-            # test different chunk sizes
-            testarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}
-            for chunksize in (1, 8, 16, 32, 64, 128, 256, 512, 1024):
-                buf = np.zeros(chunksize, dtype="i")
-                array_iter = IntervalToArrayChunks(iter(intervals), buf)
-                #print "chunksize", chunksize
-                for chrom, start, end, arr in array_iter:
-                    #print chrom, start, end, arr, fullarr[chrom][start:end]
-                    testarr[chrom][start:end] = arr                    
-                    self.assertTrue(np.all(arr == fullarr[chrom][start:end]))
-            for chrom in testarr:
-                self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))    
+#    def test_cinterval_to_array(self):        
+#        """Testing interval to array code"""
+#        ref = "chr1"        
+#        endpos = 1000        
+#        chunkstep = 10
+#        dtype = "i"
+#        # test different interval sizes
+#        for intervalsize in xrange(1,100,10):
+#            fullarr = np.zeros(endpos+intervalsize, dtype=dtype)
+#            intervals = []
+#            val = 0
+#            for start in xrange(0, endpos, intervalsize):
+#                intervals.append((ref, start, start+intervalsize, "+", val))
+#                fullarr[start:start+intervalsize] = val
+#                val += 2
+#            # test different chunk sizes
+#            testarr = np.zeros(endpos+intervalsize, dtype=dtype)
+#            for chunksize in xrange(chunkstep, endpos, chunkstep):
+#                buf = np.zeros(chunksize, dtype="i")
+#                array_iter = IntervalToArrayChunks(iter(intervals), buf)
+#                for chrom, start, end, arr in array_iter:
+#                    #print chrom, start, end, arr, fullarr[start:end]
+#                    testarr[start:end] = arr
+#                    self.assertTrue(np.all(arr == fullarr[start:end]))
+#            self.assertTrue(np.all(testarr == fullarr))
+#        # test intervals on different chromosomes
+#        refiter = itertools.cycle(itertools.chain(itertools.repeat("chr1", 3),
+#                                                  itertools.repeat("chr2", 3) ,                                       
+#                                                  itertools.repeat("chr3", 3)))                                        
+#        for intervalsize in (1,10,50,100):
+#            #print "intervalsize", intervalsize
+#            fullarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
+#                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
+#                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}                       
+#            intervals = []
+#            val = 0
+#            for start in xrange(0, endpos, intervalsize):
+#                ref = refiter.next()
+#                intervals.append((ref, start, start+intervalsize, "+", val))
+#                fullarr[ref][start:start+intervalsize] = val
+#                val += 2
+#            # test different chunk sizes
+#            testarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
+#                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
+#                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}
+#            for chunksize in (1, 8, 16, 32, 64, 128, 256, 512, 1024):
+#                buf = np.zeros(chunksize, dtype="i")
+#                array_iter = IntervalToArrayChunks(iter(intervals), buf)
+#                #print "chunksize", chunksize
+#                for chrom, start, end, arr in array_iter:
+#                    #print chrom, start, end, arr, fullarr[chrom][start:end]
+#                    testarr[chrom][start:end] = arr                    
+#                    self.assertTrue(np.all(arr == fullarr[chrom][start:end]))
+#            for chrom in testarr:
+#                self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))    
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

@@ -33,7 +33,7 @@ import numpy as np
 import tables
 
 from track import Track, TrackError, parse_interval
-import npintervaltree as intervaltree
+import lib.npintervaltree as intervaltree
 
 REF_COL_NAME = "ref"
 START_COL_NAME = "start"

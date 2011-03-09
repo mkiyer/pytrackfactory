@@ -12,7 +12,7 @@ import logging
 import tables
 import numpy as np
 from track import Track, TrackError
-from io.interval import intervals_to_array
+from io.interval import write_interval_data_to_array
 
 DTYPE_ATTR = 'dtype'
 
@@ -88,12 +88,9 @@ class ArrayTrack(Track):
 
     def fromintervals(self, interval_iter):
         dtype = np.dtype(self._get_dtype())
-        rnames = set(self.get_rnames())
-        for ref, start, end, arr in \
-            intervals_to_array(interval_iter, dtype=dtype, 
-                               chunksize=(16*self.h5_chunksize)):
-            if ref not in rnames:
-                logging.debug("Skipping %s:%d-%d" % (ref, start, end))
-                continue
-            logging.debug("Adding %s:%d-%d" % (ref, start, end))
-            self[(ref, start, end)] = arr
+        rname_array_dict = self._get_arrays()
+        write_interval_data_to_array(interval_iter, 
+                                     rname_array_dict, 
+                                     dtype=self._get_dtype(), 
+                                     chunksize=(self.h5_chunksize << 4))
+
