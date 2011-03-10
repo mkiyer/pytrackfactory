@@ -15,10 +15,10 @@ import tables
 import numpy as np
 from bitarray import bitarray
 
-from track import Track, TrackError, parse_interval
+from track import Track, TrackError, NEG_STRAND
 from bitarraytrack import BitArrayTrack, translate_bpb, frame_bpb, \
     DTYPE_ATTR, BPB_ATTR
-from io.sequence import parse_fasta_as_chunks
+from io.sequence import parse_fasta_as_chunks, dna_reverse_complement
 
 _encode_dict_2bpb = {'N': bitarray('00'),
                      'n': bitarray('00'),
@@ -87,27 +87,32 @@ class SequenceTrack(BitArrayTrack):
     def __init__(self, hdf_group, bpb=4):
         super(SequenceTrack, self).__init__(hdf_group, bpb)
 
-    def _read(self, arr, start, end):
+    def _read(self, arr, start, end, strand):
         # get bitarray
         b = BitArrayTrack._read(self, arr, start, end)
         # decode to sequence
         codec_dict = _decoders[self.bpb]
-        return ''.join(b.decode(codec_dict))
+        seq = ''.join(b.decode(codec_dict))
+        if strand == NEG_STRAND:
+            seq = dna_reverse_complement(seq)
+        return seq
 
-    def _write(self, arr, start, end, value):
+    def _write(self, arr, start, end, strand, value):
+        if strand == NEG_STRAND:
+            value = dna_reverse_complement(value)
         # encode to bitarray
         b = bitarray()
         b.encode(_encoders[self.bpb], value)        
         # write
-        b = BitArrayTrack._write(self, arr, start, end, b)
+        BitArrayTrack._write(self, arr, start, end, b)
 
     def __getitem__(self, key):
-        arr, start, end = self._parse_interval(key)        
-        return self._read(arr, start, end)
+        arr, start, end, strand = self._parse_interval(key)
+        return self._read(arr, start, end, strand)
 
     def __setitem__(self, key, value):
-        arr, start, end = self._parse_interval(key)
-        self._write(arr, start, end, value)
+        arr, start, end, strand = self._parse_interval(key)
+        self._write(arr, start, end, strand, value)
 
     def fromfasta(self, line_iter, ref=None, start=None, end=None,
                   split_tag=True):
@@ -127,8 +132,8 @@ class SequenceTrack(BitArrayTrack):
             if ref is None:
                 if split_tag:
                     tag = tag.split(None,1)[0]
-                arr, arr_start, arr_end = self._parse_interval(tag)
-                self._write(arr, arr_start + start, arr_start + end, seq)
+                arr, arr_start, arr_end, strand = self._parse_interval(tag)
+                self._write(arr, arr_start + start, arr_start + end, strand, seq)
             else:
-                arr, arr_start, arr_end = self._parse_interval((ref, start, end))
-                self._write(arr, arr_start + start, arr_start + end, seq)
+                arr, arr_start, arr_end, strand = self._parse_interval((ref, start, end))
+                self._write(arr, arr_start + start, arr_start + end, strand, seq)

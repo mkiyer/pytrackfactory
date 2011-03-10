@@ -14,8 +14,8 @@ np.import_array()
 cdef extern from "Python.h":
     stdio.FILE* PyFile_AsFile(object)
 
-DTYPE = np.float32
-ctypedef np.float32_t DTYPE_t
+DTYPE = np.float64
+ctypedef np.float64_t DTYPE_t
 DEFAULT_CHUNKSIZE = (1 << 20)
 cdef char * PRINT_FORMAT_STRING = "%s\t%d\t%d\t%.2f\n"
 
@@ -76,22 +76,26 @@ def _array_to_bedgraph_span(char * ref,
 
 def array_to_bedgraph(char * ref, object arr, object fileh, int start=0, 
                       int end=-1, int span=1, float factor=1.0, 
-                      int chunksize=DEFAULT_CHUNKSIZE):    
+                      int chunksize=DEFAULT_CHUNKSIZE,
+                      int channel=0):
     if end < start:
-        end = arr.shape[0]    
-    span = max(1, span)
-    span = min(end-start, span)
-    chunksize = min(end-start, chunksize)
+        end = arr.shape[0]
+    if span < 1:
+        span = 1
+    if span > (end - start):
+        span = (end - start)
+    if chunksize > (end - start):
+        chunksize = (end - start)
 
     while start < (end - chunksize):
         if span == 1:
-            _array_to_bedgraph(ref, start, arr[start:start+chunksize], fileh, factor)
+            _array_to_bedgraph(ref, start, arr[start:start+chunksize,channel], fileh, factor)
         else:
-            _array_to_bedgraph_span(ref, start, arr[start:start+chunksize], fileh, span, factor)            
+            _array_to_bedgraph_span(ref, start, arr[start:start+chunksize,channel], fileh, span, factor)            
         start += chunksize
 
     if start < end:
         if span == 1:
-            _array_to_bedgraph(ref, start, arr[start:end], fileh, factor)
+            _array_to_bedgraph(ref, start, arr[start:end,channel], fileh, factor)
         else:
-            _array_to_bedgraph_span(ref, start, arr[start:start+chunksize], fileh, span, factor)            
+            _array_to_bedgraph_span(ref, start, arr[start:start+chunksize,channel], fileh, span, factor)            

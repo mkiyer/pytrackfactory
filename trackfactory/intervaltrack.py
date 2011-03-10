@@ -31,6 +31,7 @@ import collections
 import operator
 import numpy as np
 import tables
+import logging
 
 from track import Track, TrackError, parse_interval
 from lib.intervaltree import IntervalTree
@@ -96,9 +97,10 @@ class IntervalTrack(Track):
         super(IntervalTrack, self).__init__(hdf_group)
         if not INTERVAL_TABLE in self.hdf_group:
             if dtype is None:
-                dtype = np.dtype(get_base_dtype_fields())
+                dtype = get_base_dtype_fields()
+            dtype = np.dtype(dtype)
             self._init_table(dtype, expectedrows)
-            hdf_group._v_attrs[DTYPE_ATTR] = np.dtype(dtype)            
+            hdf_group._v_attrs[DTYPE_ATTR] = dtype            
         self._init_index()
 
     def _get_dtype(self):
@@ -171,7 +173,7 @@ class IntervalTrack(Track):
                 tree.tohdf(tree_group, rname)
     
     def __getitem__(self, key):
-        ref, start, end = parse_interval(key)
+        ref, start, end, strand = parse_interval(key)
         return self.intersect(ref, start, end)
 
     def __iter__(self):
@@ -293,12 +295,17 @@ class IntervalTrack(Track):
         tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
         fields = self._get_dtype().names
         row = tbl.row
-        debug = 0
+        flush_every = 1000
+        rows = 0
+        logging.info("[%s] inserting intervals" % (self.__class__.__name__))
         for interval in interval_iter:
             for i,colname in enumerate(fields):
                 row[colname] = interval[i]
-            debug += 1
             row.append()
+            rows += 1
+            if rows % (flush_every) == 0:
+                tbl.flush()
         tbl.flush()
         if index:
+            logging.info("[%s] building index" % (self.__class__.__name__))
             self.index(persist=True)

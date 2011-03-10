@@ -9,9 +9,7 @@ import tempfile
 import os
 import StringIO
 
-from trackfactory.io.cbedgraph import array_to_bedgraph as carray_to_bedgraph
-from trackfactory.io.bedgraph import array_to_bedgraph
-from trackfactory.io.bedgraph import bedgraph_to_array
+from trackfactory.io.bedgraph import array_to_bedgraph, bedgraph_to_array
 
 def interval(ref, start, end, cov):
     return "%s\t%d\t%d\t%.2f\n" % (ref, start, end, cov)
@@ -27,67 +25,50 @@ def getvalue(fh):
     return bedgraph_to_array(fh)
     #return ''.join(fh.readlines())
 
-class Test(unittest.TestCase):
+class TestBedGraph(unittest.TestCase):
 
     def test_array_to_bedgraph_zeros(self):
         a = np.array([0, 0, 0, 0, 0])
+        a.resize((a.shape[0],1))
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output)
         contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
+        os.remove(filename)        
 
     def test_array_to_bedgraph_jumps(self):
         a = np.array([0, 0, 1, 1, 0, 0, 0, 0, 10, 10, 0, 0], dtype=np.float)
+        a.resize((a.shape[0],1))
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output)
         contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
 
     def test_array_to_bedgraph_consecutive(self):
         a = np.arange(0, 100, dtype=np.float)
+        a.resize((a.shape[0],1))
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output)
         contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
 
     def test_array_to_bedgraph_sparse(self):
-        a = np.zeros(10000, dtype=np.float)
+        a = np.zeros((10000,1), dtype=np.float)
         a[6655] = 100
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output)
         contents = getvalue(output)   
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
 
     def test_array_to_bedgraph_sparse_spans(self):
-        a = np.zeros(10000, dtype=np.float)
+        a = np.zeros((10000,1), dtype=np.float)
         a[6655] = 100
         # check that spans work too
         output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=10)
+        array_to_bedgraph('chr1', a, output, span=10)
         contents = getvalue(output)
         correct = np.zeros(10000, dtype=np.float)
         correct[6650:6660] = 10
@@ -95,42 +76,25 @@ class Test(unittest.TestCase):
         os.remove(filename)
 
     def test_array_to_bedgraph_span_zeros(self):
-        a = np.zeros(10000, dtype=np.float)
+        a = np.zeros((10000,1), dtype=np.float)
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output, span=1)
         contents = getvalue(output)        
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=1)
-        contents = getvalue(output)        
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
 
     def test_array_to_bedgraph_span_jumps(self):
         a = np.array([0, 0, 2, 2, 0, 0, 4, 4, 0, 0, 0, 0, 10, 10, 10, 10], dtype=np.float)
+        a.resize((a.shape[0],1))
         # span of 2
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output, span=2)
         contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
         # span of 4
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output, span=4)
-        contents = getvalue(output)
-        correct = np.array([1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 0, 10, 10, 10, 10])
-        self.assertTrue(np.array_equal(contents['chr1'], correct))
-        os.remove(filename)
-        # span of 2
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=2)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        # span of 4
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=4)
         contents = getvalue(output)
         correct = np.array([1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 0, 10, 10, 10, 10])
         self.assertTrue(np.array_equal(contents['chr1'], correct))
@@ -138,27 +102,18 @@ class Test(unittest.TestCase):
 
     def test_array_to_bedgraph_span_uneven(self):
         a = np.array([0, 0, 2, 2, 0, 0, 4, 4, 0, 0, 0, 0, 10, 10, 10, 10, 999], dtype=np.float)
+        a.resize((a.shape[0],1))
         # span of 2
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output, span=2)
         contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=2)
-        contents = getvalue(output)
-        self.assertTrue(np.array_equal(contents['chr1'], a))
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
         os.remove(filename)
         # span of 4
         a = np.array([0, 0, 2, 2, 0, 0, 4, 4, 0, 0, 0, 0, 10, 10, 10, 10, 999, 998, 997])
+        a.resize((a.shape[0],1))
         output, filename = make_temp()
         array_to_bedgraph('chr1', a, output, span=4)
-        contents = getvalue(output)
-        correct = np.array([1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 0, 10, 10, 10, 10, 998, 998, 998])
-        self.assertTrue(np.array_equal(contents['chr1'], correct))
-        os.remove(filename)
-        output, filename = make_temp()
-        carray_to_bedgraph('chr1', a, output, span=4)
         contents = getvalue(output)
         correct = np.array([1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 0, 10, 10, 10, 10, 998, 998, 998])
         self.assertTrue(np.array_equal(contents['chr1'], correct))

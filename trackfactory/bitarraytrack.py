@@ -12,7 +12,7 @@ import tables
 import numpy as np
 from bitarray import bitarray
 
-from track import Track, TrackError, parse_interval
+from track import Track, TrackError
 
 DTYPE_ATTR = 'dtype'
 BPB_ATTR = 'bpb'
@@ -120,9 +120,9 @@ class BitArrayTrack(Track):
         arr[startbyte:endbyte] = np.fromstring(frameba.tostring(), dtype=np.byte)
 
     def __getitem__(self, key):
-        arr, start, end = self._parse_interval(key)
+        arr, start, end, strand = self._parse_interval(key)
         return self._read(arr, start, end)
 
     def __setitem__(self, key, value):
-        arr, start, end = self._parse_interval(key)
+        arr, start, end, strand = self._parse_interval(key)
         self._write(arr, start, end, value)

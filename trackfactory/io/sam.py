@@ -44,17 +44,29 @@ def get_genomic_intervals(read):
     assert aend == read.aend
     return intervals
 
-class BamCoverageStatistics:
+class BamCoverageStatistics(object):
     NUM_READS_ATTR = "num_reads"
+    STRAND_READS_ATTR = "strand_reads"
     TOTAL_COV_ATTR = "total_cov"
+    STRAND_COV_ATTR = "strand_cov"
     RLEN_ATTR = "rlen"
     RLEN_DIST_ATTR = "rlen_dist"
     
     def __init__(self):
         self.num_reads = 0
+        self.strand_reads = [0, 0]
         self.total_cov = 0.0
+        self.strand_cov = [0.0, 0.0]
         self.rlen_dict = collections.defaultdict(lambda: 0.0)
     
+    def add(self, read, cov):
+        strand = int(read.is_reverse)
+        self.num_reads += 1
+        self.strand_reads[strand] += 1
+        self.rlen_dict[read.rlen] += 1
+        self.total_cov += cov
+        self.strand_cov[strand] += cov
+
     def update(self, other):
         self.num_reads += other.num_reads
         self.total_cov += other.total_cov
@@ -68,6 +80,8 @@ class BamCoverageStatistics:
             return
         self.num_reads = hdf_group._v_attrs[self.NUM_READS_ATTR]
         self.total_cov = hdf_group._v_attrs[self.TOTAL_COV_ATTR]
+        self.strand_reads = hdf_group._v_attrs[self.STRAND_READS_ATTR]
+        self.strand_cov = hdf_group._v_attrs[self.STRAND_COV_ATTR]
         rlen_dict = hdf_group._v_attrs[self.RLEN_DIST_ATTR]
         for rlen in rlen_dict:
             self.rlen_dict[rlen] += rlen_dict[rlen]    
@@ -81,7 +95,9 @@ class BamCoverageStatistics:
         hdf_group._v_attrs[self.NUM_READS_ATTR] = self.num_reads
         hdf_group._v_attrs[self.TOTAL_COV_ATTR] = self.total_cov
         hdf_group._v_attrs[self.RLEN_DIST_ATTR] = dict(self.rlen_dict) 
-
+        hdf_group._v_attrs[self.STRAND_READS_ATTR] = self.strand_reads
+        hdf_group._v_attrs[self.STRAND_COV_ATTR] = self.strand_cov
+        
     
     
 class BamCoverageIterator:
@@ -141,15 +157,16 @@ class BamCoverageIterator:
                 if (self.max_multimaps is not None) and (nh > self.max_multimaps):
                     continue
                 cov /= nh
-            self.stats.num_reads += 1
-            self.stats.rlen_dict[read.rlen] += 1
             # get reference name
             rname = self.bamfh.getrname(read.tid)
             # find genomic intervals of read alignment
+            total_cov = 0.0
             for start, end, seq in get_genomic_intervals(read):
-                #print 'START', start, 'END', end, 'SEQ', seq        
+                #print 'START', start, 'END', end, 'SEQ', seq
+                interval_cov = cov
                 if self.norm_rlen:
-                    cov /= (end - start)
+                    interval_cov /= (end - start)
+                total_cov += (end - start) * interval_cov
                 #print start, end, read.is_reverse, cov, seq
-                self.stats.total_cov += (end - start) * cov                
-                self.intervals.append((rname, start, end, read.is_reverse, cov, seq))
+                self.intervals.append((rname, start, end, read.is_reverse, interval_cov, seq))
+            self.stats.add_read(read, total_cov)
