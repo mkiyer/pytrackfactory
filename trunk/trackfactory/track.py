@@ -6,11 +6,26 @@
 """
 import subprocess
 import pysam
+import re
 
 # constants
+POS_STRAND = 0
+NEG_STRAND = 1
+NO_STRAND = 2
+_strand_str_to_int = {"+": POS_STRAND,
+                      "-": NEG_STRAND,
+                      ".": NO_STRAND}
+_strand_int_to_str = dict([(v,k) for k,v in _strand_str_to_int.items()])
+def strand_str_to_int(strand):
+    return _strand_str_to_int[strand]
+def strand_int_to_str(strand):
+    return _strand_int_to_str[strand]
+
 REF_TRACK_NAME = 'references'
 REF_NODE_PATH = "/" + REF_TRACK_NAME
 TRACK_CLASS_ATTR = 'track_class'
+
+_interval_string_re = re.compile(r'^(?P<ref>\w+)(?:\[(?P<strand>[+-.])\])?(?::(?P<start>[\d,]+)(?:-(?P<end>[\d,]+))?)?')
 
 def get_ref_length(tbl, ref):
     length = None
@@ -43,13 +58,15 @@ class Track(object):
     def _get_references_node(self):
         return self.hdf_group._v_file.getNode(REF_NODE_PATH)
     def _parse_interval(self, key):
-        ref, start, end = parse_interval(key)
+        ref, start, end, strand = parse_interval(key)
         if (ref not in self.hdf_group):
             raise TrackError("unknown reference '%s'" % (ref))
+        if start is None:
+            start = 0
         if end is None:
             end = self.get_ref_length(ref)        
         ca = self.hdf_group._f_getChild(ref)
-        return ca, start, end
+        return ca, start, end, strand
 
     def get_type(self):
         return self.hdf_group._v_attrs[TRACK_CLASS_ATTR]
@@ -86,50 +103,62 @@ class Track(object):
         for row in self._get_references_node():
             yield row.fetch_all_fields()
 
+
+def _parse_interval_string(interval):
+    """ref[strand]:start-end
+    `strand` can be '+', '-', or '.'    
+    """    
+    m = _interval_string_re.match(interval)
+    ref = m.group('ref')
+    start = m.group('start')
+    end = m.group('end')
+    strand = m.group('strand')    
+    if start is not None: 
+        start = int(start.replace(",", ""))
+    if end is not None: 
+        end = int(end.replace(",", ""))
+    if strand is None: 
+        strand = NO_STRAND
+    else:
+        strand = _strand_str_to_int[strand]
+    return ref, start, end, strand
+
+def _parse_interval_tuple(interval):
+    if interval is None:
+        return None, None, None, NO_STRAND
+    if len(interval) == 1:
+        return interval[0], None, None, NO_STRAND
+    elif len(interval) == 2:
+        return interval[0], interval[1], interval[1]+1, NO_STRAND
+    elif len(interval) == 3:
+        return interval[0], interval[1], interval[2], NO_STRAND
+    else:
+        return interval[:4]
+
 def parse_interval(interval):
     """parses a genomic interval specifier in either the string
-    format `<ref:start-end>` or tuple (ref, start, end)
+    format `<ref[strand]:start-end>` or tuple (ref, start, end, strand)
     
     :param interval: interval specifier
     :type interval: str or tuple
     
     >>> parse_interval("chr1:100-200")
-    ("chr1", 100, 200)
+    ("chr1", 100, 200, ".")
     >>> parse_interval("chr1:1,000-20,000")
     ("chr1", 1000, 20000)
+    >>> parse_interval("chr1[-]:1,000-20,000")
+    ("chr1", 1000, 20000, "-")
     >>> parse_interval("chrX")
-    ("chrX", None, None)
+    ("chrX", None, None, ".")
     >>> parse_interval("chrX:5")
-    ("chrX", 5, 6)
+    ("chrX", 5, 6, ".")
     >>> parse_interval(("chr2", 100, 300))
-    ("chr2", 100, 300) 
+    ("chr2", 100, 300, ".")
     """
-    if interval is None:
-        return None, None, None
     if isinstance(interval, basestring):
-        # remove commas
-        k = interval.replace(',','')            
-        # split chrom on ':' character
-        if k.find(':') != -1:
-            ref, startend = k.split(':')                
-            # separate start/end on '-' character
-            if k.find('-') != -1:
-                start, end = map(int, startend.split('-'))
-            else:
-                start = int(startend)
-                end = start + 1
-        else:
-            ref = k
-            start = None
-            end = None
-        return ref, start, end
-    else:
-        if len(interval) == 1:
-            return interval[0], None, None
-        elif len(interval) == 2:
-            return interval[0], interval[1], interval[1]+1
-        elif len(interval) >= 3:
-            return interval[:3]
+        interval = _parse_interval_string(interval)
+    interval = _parse_interval_tuple(interval)
+    return interval
 
 def get_refs_from_bowtie_index(bowtie_index, 
                                bowtie_inspect_bin='bowtie-inspect'):

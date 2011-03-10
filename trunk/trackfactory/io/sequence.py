@@ -8,9 +8,9 @@ from string import maketrans
 
 _dna_compl_translate = maketrans('acgtACGT', 'tgcaTGCA')
 
-def complement(s):
+def dna_complement(s):
     return s.translate(_dna_compl_translate)
-def reverse_complement(s):
+def dna_reverse_complement(s):
     return s.translate(_dna_compl_translate)[::-1]
 
 def parse_fasta_as_chunks(line_iter, chunksize=(1 << 20)):

@@ -16,6 +16,8 @@ from trackfactory.track import get_refs_from_sam, get_refs_from_bam, \
 
 from trackfactory.io.cwiggle import WiggleReader
 from trackfactory.io.bed import parse_bed6
+from trackfactory.io.sam import BamCoverageIterator, BamCoverageStatistics
+
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
@@ -128,14 +130,21 @@ def add_coverage_track(parser, options):
         if options.file_type == "bam":
             # add BAM file
             bamfh = pysam.Samfile(options.data_file, "rb")
-            t.frombam(bamfh, 
-                      options.norm_rlen,
-                      options.bam_nh,
-                      options.bam_prob,
-                      options.max_multihits,
-                      options.keep_dup)
+            intervalcoviter = BamCoverageIterator(bamfh,
+                                                  norm_rlen=options.norm_rlen, 
+                                                  num_hits_tag=options.bam_nh,
+                                                  hit_prob_tag=options.bam_prob,
+                                                  max_multimaps=options.max_multihits,
+                                                  keep_dup=options.keep_dup,
+                                                  keep_qcfail=False)
+            t.fromintervals(intervalcoviter)
+            # store coverage statistics to allow normalization calculations
+            stats = intervalcoviter.stats
+            logging.debug("\tProcessed '%d' valid reads" % (stats.num_reads))
+            logging.debug("\tTotal coverage '%f'" % (stats.total_cov))
             bamfh.close()
     tf.close()
+
 
 def add_interval_track(parser, options):
     tf = open_trackfactory(parser, options)
