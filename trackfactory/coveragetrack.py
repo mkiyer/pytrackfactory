@@ -15,7 +15,8 @@ import numpy as np
 from track import TrackError, parse_interval, NO_STRAND, POS_STRAND, NEG_STRAND
 from arraytrack import ArrayTrack
 from io.interval import write_interval_data_to_array, \
-    write_interval_data_to_stranded_array
+    write_interval_data_to_stranded_array, \
+    write_interval_data_to_stranded_allele_array
 from io.bedgraph import array_to_bedgraph
 
 COVERAGE_DTYPE = np.float32
@@ -137,6 +138,73 @@ class StrandedCoverageTrack(CoverageTrack):
                                                   rname_array_dict, 
                                                   dtype=self._get_dtype(),
                                                   chunksize=(self.h5_chunksize << 4))
+        self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
+        self.total_cov = total_cov
+        self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
+        self.num_features = intervals
+
+class StrandedAlleleCoverageTrack(StrandedCoverageTrack):
+
+    def __init__(self, hdf_group):
+        ArrayTrack.__init__(self, hdf_group, COVERAGE_DTYPE, channels=8)
+        self._init_attrs()
+
+    def _get_strand_channels(self, strand):
+        if strand == NO_STRAND:
+            return range(8)
+        else:
+            return (4*strand) + np.arange(4)
+        
+    def _count(self, arr, start, end, strand):
+        channels = self._get_strand_channels(strand)
+        return arr[start:end,channels].sum()
+        
+    def count(self, interval):
+        arr, start, end, strand = self._parse_interval(interval)
+        self._check_bounds(arr, start, end)
+        return self._count(arr, start, end, strand)
+
+    def coverage(self, interval, multiplier=1.0e6):
+        arr, start, end, strand = self._parse_interval(interval)
+        self._check_bounds(arr, start, end)
+        channels = self._get_strand_channels(strand)
+        data = arr[start:end,channels].sum(axis=1)
+        return data * (multiplier / self.total_cov)
+
+    def density(self, interval, multiplier=1.0e9):
+        arr, start, end, strand = self._parse_interval(interval)
+        self._check_bounds(arr, start, end)
+        count = self._count(arr, start, end, strand)
+        return count * (multiplier / (self.total_cov * (end - start)))
+
+    def tobedgraph(self, interval, fileh, span=1, factor=1.0, 
+                   norm=False, multiplier=1.0e6):
+        if span < 1: span = 1
+        ref, start, end, strand = parse_interval(interval)
+        if ref is None: 
+            rnames = self.get_rnames()
+        else:
+            rnames = [ref]
+        if start is None: start = 0
+        if end is None: end = -1
+        if strand == NO_STRAND:
+            channels = None
+        else:
+            channels = range(4*strand, 4*strand + 4)           
+        if norm:
+            factor *= (multiplier / (self.total_cov))
+        for rname in rnames:
+            array_to_bedgraph(rname, self._get_array(rname), fileh, 
+                              start=start, end=end, factor=factor, span=span,
+                              chunksize=self.h5_chunksize, channels=channels)
+
+    def fromintervals(self, interval_iter):
+        rname_array_dict = self._get_arrays()
+        intervals, total_cov = \
+            write_interval_data_to_stranded_allele_array(interval_iter, 
+                                                         rname_array_dict, 
+                                                         dtype=self._get_dtype(), 
+                                                         chunksize=(self.h5_chunksize << 2))
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals

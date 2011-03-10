@@ -119,7 +119,7 @@ class ArrayTrack(Track):
             array_to_bedgraph(rname, self._get_array(rname), fileh, 
                               start=start, end=end, factor=factor, span=span,
                               chunksize=self.h5_chunksize,
-                              channel=channel)
+                              channels=(channel,))
 
     def fromintervals(self, interval_iter, channel=0):
         if channel is None: channel = 0

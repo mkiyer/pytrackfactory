@@ -23,6 +23,7 @@ from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
 from trackfactory.coveragetrack import CoverageTrack
 from trackfactory.intervaltrack import IntervalTrack, get_bed_dtype_fields
+from trackfactory.rnaseqtrack import RnaseqTrack
 
 ACTION_CREATE = "create"
 ACTION_ADD = "add"
@@ -145,7 +146,6 @@ def add_coverage_track(parser, options):
             bamfh.close()
     tf.close()
 
-
 def add_interval_track(parser, options):
     tf = open_trackfactory(parser, options)
     datafile = check_datafile(parser, options)
@@ -162,6 +162,17 @@ def add_interval_track(parser, options):
                  (IntervalTrack.__name__, options.name, options.file))
     tf.close()
 
+def add_rnaseq_track(parser, options):
+    tf = open_trackfactory(parser, options)
+    t = tf.create_track(options.name, RnaseqTrack)
+    logging.info("added %s %s to trackfactory %s" %
+                 (RnaseqTrack.__name__, options.name, options.file))
+    if (options.bam_file is not None) and (options.bed_file is not None):
+        logging.info("inserting Tophat files '%s' and '%s'" % 
+                     (options.bam_file, options.bed_file))
+        t.fromtophat(options.bam_file, options.bed_file)
+    tf.close()
+
 def view_track(parser, options):
     tf = TrackFactory(options.file, "r")
     if not tf.has_track(options.name):
@@ -172,16 +183,24 @@ def view_track(parser, options):
     t = tf.get_track(options.name)
     track_type = t.get_type()
     logging.debug("opened track '%s' type '%s'" % (options.name, track_type))        
-    if track_type == CoverageTrack.__name__:
+    if track_type == SequenceTrack.__name__:
+        print t[region]
+    if track_type == ArrayTrack.__name__:
         if options.file_type == "bedgraph":
             t.tobedgraph(region, sys.stdout)
         else:
             print t[region]
-    elif track_type == ArrayTrack.__name__:
+    elif track_type == CoverageTrack.__name__:
         if options.file_type == "bedgraph":
             t.tobedgraph(region, sys.stdout)
         else:
             print t[region]
+    elif track_type == RnaseqTrack.__name__:
+        cov_track = t.get_coverage_track()
+        #print cov_track.tobedgraph(region, sys.stdout)
+        print cov_track.density(region)
+        junc_track = t.get_junction_track()
+        print junc_track[region]
     logging.debug("done")
     tf.close()
 
@@ -320,6 +339,18 @@ def main():
                            "insert into track")    
     subparser.set_defaults(func=add_interval_track,
                            file_type="bed")
+    
+    #
+    # add an RnaseqTrack
+    #
+    subparser = addsubparsers.add_parser(RnaseqTrack.__name__,
+                                         help='rnaseq track')
+    subparser.add_argument("bam_file", default=None,
+                           help="(optional) Tophat BAM file")
+    subparser.add_argument("bed_file", default=None,
+                           help="(optional) Tophat BED file")
+    subparser.set_defaults(func=add_rnaseq_track)
+    
     #
     # create parser for "view" command
     #

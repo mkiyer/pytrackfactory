@@ -160,13 +160,13 @@ class BamCoverageIterator:
             # get reference name
             rname = self.bamfh.getrname(read.tid)
             # find genomic intervals of read alignment
-            total_cov = 0.0
+            read_cov = 0.0
             for start, end, seq in get_genomic_intervals(read):
                 #print 'START', start, 'END', end, 'SEQ', seq
                 interval_cov = cov
                 if self.norm_rlen:
                     interval_cov /= (end - start)
-                total_cov += (end - start) * interval_cov
+                read_cov += (end - start) * interval_cov
                 #print start, end, read.is_reverse, cov, seq
                 self.intervals.append((rname, start, end, read.is_reverse, interval_cov, seq))
-            self.stats.add_read(read, total_cov)
+            self.stats.add(read, read_cov)
