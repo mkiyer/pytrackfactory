@@ -15,7 +15,7 @@ import tables
 import numpy as np
 from bitarray import bitarray
 
-from track import Track, TrackError, NEG_STRAND
+from track import Track, TrackError, NEG_STRAND, parse_interval
 from bitarraytrack import BitArrayTrack, translate_bpb, frame_bpb, \
     DTYPE_ATTR, BPB_ATTR
 from io.sequence import parse_fasta_as_chunks, dna_reverse_complement
@@ -120,18 +120,23 @@ class SequenceTrack(BitArrayTrack):
         
         If no fasta header is provided, the user must specify the `ref`, 
         `start`, and `end` arguments to the function.  Otherwise, the
-        fasta header must be formatted in `>ref:start-end` string format
-        and will be parsed accordingly.
+        fasta header must be formatted in `>ref[strand]:start-end` string 
+        format and will be parsed accordingly.
         
         You can use this function to import entire chromosomes (or genomes)
         as inserting into the track is done in a efficient, chunked fashion
         """
         import logging
+        rnames = set(self.get_rnames())
         for tag, start, end, seq in parse_fasta_as_chunks(line_iter):
             logging.debug("%s:%d-%d" % (tag, start, end))
             if ref is None:
                 if split_tag:
                     tag = tag.split(None,1)[0]
+                rname, start, end, strand = parse_interval(tag)
+                if rname not in rnames:
+                    logging.warning("[SequenceTrack] SKIPPING ref '%s'" % (rname))
+                    continue
                 arr, arr_start, arr_end, strand = self._parse_interval(tag)
                 self._write(arr, arr_start + start, arr_start + end, strand, seq)
             else:

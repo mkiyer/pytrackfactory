@@ -174,6 +174,10 @@ class IntervalTrack(Track):
     
     def __getitem__(self, key):
         ref, start, end, strand = parse_interval(key)
+        if start is None:
+            start = 0
+        if end is None:
+            end = self.get_ref_length(ref)
         return self.intersect(ref, start, end)
 
     def __iter__(self):
@@ -189,6 +193,7 @@ class IntervalTrack(Track):
         """Finds all intervals that have at least 1-bp of overlap
         with the interval provided
         """
+        print rname, start, end
         tbl = self.hdf_group._f_getChild(INTERVAL_TABLE)
         idx = self.indexes[rname]
         if (idx.tree is None) or idx.dirty:

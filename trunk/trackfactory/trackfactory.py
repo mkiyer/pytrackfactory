@@ -14,8 +14,7 @@ from coveragetrack import CoverageTrack
 from bitarraytrack import BitArrayTrack
 from sequencetrack import SequenceTrack
 from intervaltrack import IntervalTrack
-
-#from sequel2.track.pileuptrack import PileupTrack
+from rnaseqtrack import RnaseqTrack
 #from sequel2.track.featuretrack import FeatureTrack
 #from sequel2.track.expressiontrack import ExpressionTrack
 
@@ -62,7 +61,8 @@ class TrackFactory(object):
                      CoverageTrack,
                      BitArrayTrack,
                      SequenceTrack, 
-                     IntervalTrack]
+                     IntervalTrack,
+                     RnaseqTrack]
     track_name_class_dict = dict((cls.__name__, cls) for cls in track_classes)
 
     def __init__(self, filename, mode="r", refs=None):
