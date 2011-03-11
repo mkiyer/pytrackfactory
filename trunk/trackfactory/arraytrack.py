@@ -107,5 +107,6 @@ class ArrayTrack(Track):
             write_interval_data_to_array(interval_iter, 
                                          rname_array_dict, 
                                          dtype=self._get_dtype(),
-                                         channel=channel,                                     
-                                         chunksize=(self.h5_chunksize << 4))
+                                         chunksize=(self.h5_chunksize << 4),
+                                         mode="channel",
+                                         channel=channel)                                         

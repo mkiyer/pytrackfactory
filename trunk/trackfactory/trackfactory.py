@@ -75,6 +75,11 @@ class TrackFactory(object):
                 raise TrackError("TrackFactory: Cannot create track factory when mode='r' (read only)")
             self._create_reference_track(refs)
 
+    def __iter__(self):
+        for hdf_group in self.h5file.iterNodes(self.h5file.root):
+            if TRACK_CLASS_ATTR in hdf_group._v_attrs:
+                yield hdf_group._v_name, hdf_group._v_attrs[TRACK_CLASS_ATTR]
+
     def _get_hdf_file(self):
         return self.h5file._v_file
 

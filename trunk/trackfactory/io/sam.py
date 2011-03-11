@@ -7,6 +7,8 @@ import array
 import collections
 import operator
 
+from cinterval import SequenceInterval
+
 CIGAR_M = 0 #match  Alignment match (can be a sequence match or mismatch)
 CIGAR_I = 1 #insertion  Insertion to the reference
 CIGAR_D = 2 #deletion  Deletion from the reference
@@ -141,6 +143,7 @@ class BamCoverageIterator:
     def get_next_read(self):
         while len(self.intervals) == 0:
             read = self.read_iterator.next()
+            strand = "+" if read.is_reverse else "-"
             #print 'READ', read
             #print 'CIGAR', read.cigar
             # check if read is usable
@@ -168,5 +171,9 @@ class BamCoverageIterator:
                     interval_cov /= (end - start)
                 read_cov += (end - start) * interval_cov
                 #print start, end, read.is_reverse, cov, seq
-                self.intervals.append((rname, start, end, read.is_reverse, interval_cov, seq))
+                ival = SequenceInterval(rname, start, end, 
+                                        strand=int(read.is_reverse), 
+                                        value=interval_cov, 
+                                        seq=seq)
+                self.intervals.append(ival)
             self.stats.add(read, read_cov)

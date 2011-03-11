@@ -16,6 +16,9 @@ the positions returned match the BED/interval format which is zero-based, half-o
 
 Created on Mar 5, 2011
 """
+from cinterval cimport Interval
+from cinterval import strand_str_to_int, POS_STRAND
+
 cdef enum linemode:
     MODE_BED
     MODE_FIXED
@@ -85,9 +88,15 @@ cdef class WiggleReader:
                 fields = line.split()
                 if len( fields ) > 3:
                     if len( fields ) > 5:
-                        return fields[0], int( fields[1] ), int( fields[2] ), fields[5], float( fields[3] )
+                        # chrom, start, end, strand, value.
+                        return Interval(ref=fields[0], start=int(fields[1]), 
+                                        end=int(fields[2]), 
+                                        strand=strand_str_to_int(fields[5]), 
+                                        value=float(fields[3]))
                     else:
-                        return fields[0], int( fields[1] ), int( fields[2] ), "+", float( fields[3] )
+                        return Interval(ref=fields[0], start=int(fields[1]), 
+                                        end=int(fields[2]), strand=POS_STRAND, 
+                                        value=float(fields[3]))
             elif self.mode == MODE_VARIABLE: 
                 fields = line.split()
                 try:
@@ -95,14 +104,18 @@ cdef class WiggleReader:
                     val = float( fields[1] )
                 except ValueError:
                     continue
-                return self.current_chrom, pos, pos + self.current_span, "+", val
+                return Interval(self.current_chrom, pos, 
+                                pos + self.current_span, strand=POS_STRAND, 
+                                value=val)
             elif self.mode == MODE_FIXED:
                 fields = line.split()
                 try:
                     val = float( fields[0] )
                 except ValueError:
                     continue
-                return self.current_chrom, self.current_pos, self.current_pos + self.current_span, "+", val
+                return Interval(self.current_chrom, self.current_pos, 
+                                self.current_pos + self.current_span, 
+                                strand=POS_STRAND, value=val)
                 self.current_pos += self.current_step
             else:
                 raise "Unexpected input line: %s" % line.strip()
