@@ -8,6 +8,74 @@ cimport numpy as np
 cimport cython
 cimport libc.stdio as stdio
 
+def write_interval_data_to_array(interval_iter, rname_array_dict, dtype, 
+                                 channel, chunkshape, mode):
+    if mode == "channel":
+        write_func = write_channel
+    elif mode == "strand":
+        write_func = write_strand
+    elif mode == "allel":
+        write_func = write_strand_allele
+    # check params
+    chunksize = chunkshape[0]
+    num_channels = chunkshape[1]
+    if chunksize <= 0:
+        chunksize = 1
+    # initialize array chunk
+    arr = None
+    chunk_arr = np.zeros(chunkshape, dtype=dtype)
+    chunk_chrom = None
+    chunk_start = 0
+    chunk_end = 0
+    dirty = False
+    # keep track of statistics
+    intervals = 0
+    total_cov = 0
+    # parse intervals
+    for interval in interval_iter:
+        chrom, start, end, strand, value, seq = interval[:6]
+        if chrom not in rname_array_dict:
+            continue
+        # stats
+        intervals += 1
+        total_cov += ((end - start) * value)
+        # check if the new interval is outside the current chunk
+        if ((chunk_chrom != chrom) or (start < chunk_start) or 
+            (start >= (chunk_start + chunksize))):
+            if dirty:
+                # write chunk
+                arr[chunk_start:chunk_end] += chunk_arr[:chunk_end-chunk_start]
+                dirty = False
+            # reset chunk
+            chunk_arr[:] = 0
+            chunk_chrom = chrom
+            chunk_start = start
+            chunk_end = chunk_start
+            arr = rname_array_dict[chunk_chrom]
+        # ensure value is compatible with array
+        value = np.cast[dtype](value)     
+        # deal with intervals larger than the chunk size
+        if end > (chunk_start + chunksize):
+            # fill up rest of current chunk with value
+            write_func(chunk_arr, (start-chunk_start), chunksize, channel, 
+                       strand, seq[:chunk_start+chunksize-start], value)
+            # do one big write of the rest of the data
+            write_func(arr, (chunk_start+chunksize), end, channel, 
+                       strand, seq[chunk_start+chunksize-start:], value)
+            # update chunk end
+            chunk_end = chunk_start + chunksize
+        else:
+            # fill array with data
+            if end > chunk_end:
+                chunk_end = end
+            write_func(chunk_arr, (start-chunk_start), (end-chunk_start), 
+                       channel, strand, seq, value)
+        dirty = True
+    # write final chunk
+    if dirty:        
+        arr[chunk_start:chunk_end] += chunk_arr[:chunk_end-chunk_start]
+    return intervals, total_cov
+
 cdef class Interval:
     """
     Basic interval class

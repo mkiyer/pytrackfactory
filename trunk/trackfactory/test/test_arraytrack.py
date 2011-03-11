@@ -23,11 +23,11 @@ def random_intervals(n, length, isize_max, dtype):
     for i in xrange(1000):
         start = np.random.randint(0, 100000-isize_max)
         end = start + np.random.randint(0, isize_max)
-        intervals.append(('gene1', start, end, ".", i))
+        intervals.append(('gene1', start, end, ".", i, None))
         correct[start:end] += i
     return intervals, correct
     
-class TestReferences(unittest.TestCase):
+class TestArrayTrack(unittest.TestCase):
     def setUp(self):
         filename = mktemp(prefix="tmp", suffix=".h5")
         self.filename = filename

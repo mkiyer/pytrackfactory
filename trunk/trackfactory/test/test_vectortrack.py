@@ -16,7 +16,7 @@ import random
 
 from trackfactory.track import TrackError
 from trackfactory import TrackFactory
-from trackfactory.coveragetrack import StrandedCoverageTrack, StrandedAlleleCoverageTrack
+from trackfactory.vectortrack import VectorTrack, StrandedVectorTrack, StrandedAlleleVectorTrack
 
 def mktemp(prefix, suffix):
     fh, filename = tempfile.mkstemp(suffix=suffix, prefix=prefix)
@@ -70,12 +70,12 @@ def random_stranded_allele_intervals(n, length, isize_max, dtype):
         intervals.append(('gene1', start, end, 1, -1, seq))
     return intervals, correct
 
-class TestCoverageTrack(unittest.TestCase):
+class TestVectorTrack(unittest.TestCase):
     def setUp(self):
         filename = mktemp(prefix="tmp", suffix=".h5")
         self.filename = filename
-        self.length = 100
-        self.isize_max = 10
+        self.length = 100000
+        self.isize_max = 500
         self.refs = (('gene1', self.length), ('gene2', 10))
         self.tf = TrackFactory(self.filename, 'w', refs=self.refs) 
 
@@ -84,12 +84,33 @@ class TestCoverageTrack(unittest.TestCase):
         if os.path.exists(self.filename):
             os.remove(self.filename)
 
+    def test_fromintervals(self):
+        dtype = "i"
+        intervals1, correct1 = random_intervals(1000, 100000, 500, dtype)
+        # try one channel array
+        t = self.tf.create_track("a", VectorTrack, dtype, channels=1)
+        t.fromintervals(iter(intervals1), channel=0)
+        self.assertTrue(np.all(t["gene1"][:,0] == correct1))
+        # try three channel array
+        intervals2, correct2 = random_intervals(1000, 100000, 500, dtype)
+        intervals3, correct3 = random_intervals(1000, 100000, 500, dtype)
+        t = self.tf.create_track("b", VectorTrack, dtype, channels=3)
+        t.fromintervals(iter(intervals1), channel=0)
+        t.fromintervals(iter(intervals2), channel=1)
+        t.fromintervals(iter(intervals3), channel=2)
+        self.assertTrue(np.all(t["gene1"][:,0] == correct1))
+        self.assertFalse(np.all(t["gene1"][:,0] == correct2))
+        self.assertTrue(np.all(t["gene1"][:,1] == correct2))
+        self.assertFalse(np.all(t["gene1"][:,1] == correct3))
+        self.assertTrue(np.all(t["gene1"][:,2] == correct3))
+        self.assertFalse(np.all(t["gene1"][:,2] == correct1))
+
     def test_stranded_intervals(self):
         """testing allocating coverage to both strands"""
         dtype = "i4"
         intervals1, correct1 = random_stranded_intervals(100, self.length, self.isize_max, dtype)
         total_cov = correct1.sum()
-        t = self.tf.create_track("a", StrandedCoverageTrack)
+        t = self.tf.create_track("a", StrandedVectorTrack)
         # test loading from intervals
         t.fromintervals(iter(intervals1))
         self.assertTrue(np.all(t["gene1"] == correct1))
@@ -98,34 +119,42 @@ class TestCoverageTrack(unittest.TestCase):
         for interval in intervals2:
             ref, start, end, strand, val = interval
             # check plus strand
-            mycount = t.count((ref, start, end, 0, val))
-            mycov = t.coverage((ref, start, end, 0, val), multiplier=1.0)
-            mydens = t.density((ref, start, end, 0, val), multiplier=1.0)
+            # count
+            mycount = t.count((ref, start, end, "+", val))
             correctcount = correct1[start:end,0].sum()
-            correctcov = correct1[start:end,0] / float(total_cov)
-            correctdens = correctcount / float(total_cov * (end - start))
             self.assertAlmostEqual(mycount, correctcount)
+            # coverage
+            mycov = t.coverage((ref, start, end, "+", val), multiplier=1.0)
+            correctcov = correct1[start:end,0] / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
+            # density
+            mydens = t.density((ref, start, end, "+", val), multiplier=1.0)
+            correctdens = correctcount / float(total_cov * (end - start))            
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))            
             # check minus strand
-            mycount = t.count((ref, start, end, 1, val))
-            mycov = t.coverage((ref, start, end, 1, val), multiplier=1.0)
-            mydens = t.density((ref, start, end, 1, val), multiplier=1.0)
+            # count
+            mycount = t.count((ref, start, end, "-", val))
             correctcount = correct1[start:end,1].sum()
-            correctcov = correct1[start:end,1] / float(total_cov)
-            correctdens = correctcount / float(total_cov * (end - start))
             self.assertAlmostEqual(mycount, correctcount)
+            # coverage
+            mycov = t.coverage((ref, start, end, "-", val), multiplier=1.0)
+            correctcov = correct1[start:end,1] / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
+            # density
+            mydens = t.density((ref, start, end, "-", val), multiplier=1.0)
+            correctdens = correctcount / float(total_cov * (end - start))
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))            
             # check both strands
-            mycount = t.count((ref, start, end, 2, val))
-            mycov = t.coverage((ref, start, end, 2, val), multiplier=1.0)
-            mydens = t.density((ref, start, end, 2, val), multiplier=1.0)
+            mycount = t.count((ref, start, end, ".", val))
             correctcount = correct1[start:end].sum()
-            correctcov = correct1[start:end].sum(axis=1) / float(total_cov)
-            correctdens = correctcount / float(total_cov * (end - start))
             self.assertAlmostEqual(mycount, correctcount)
+            # cov
+            mycov = t.coverage((ref, start, end, ".", val), multiplier=1.0)
+            correctcov = correct1[start:end].sum(axis=1) / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
+            # density
+            mydens = t.density((ref, start, end, ".", val), multiplier=1.0)
+            correctdens = correctcount / float(total_cov * (end - start))
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))            
 
     def test_stranded_allele_intervals(self):
@@ -133,7 +162,7 @@ class TestCoverageTrack(unittest.TestCase):
         dtype = "f"
         intervals1, correct1 = random_stranded_allele_intervals(100, self.length, self.isize_max, dtype)
         total_cov = correct1.sum()
-        t = self.tf.create_track("a", StrandedAlleleCoverageTrack)
+        t = self.tf.create_track("a", StrandedAlleleVectorTrack)
         # test loading from intervals
         t.fromintervals(iter(intervals1))
         self.assertTrue(np.all(t["gene1"] == correct1))        
@@ -142,33 +171,33 @@ class TestCoverageTrack(unittest.TestCase):
         for interval in intervals2:
             ref, start, end, strand, val = interval
             # check plus strand
-            mycount = t.count((ref, start, end, 0, val))
+            mycount = t.count((ref, start, end, "+", val))
             correctcount = correct1[start:end,0:4].sum()
             self.assertAlmostEqual(mycount, correctcount)
-            mycov = t.coverage((ref, start, end, 0, val), multiplier=1.0)
+            mycov = t.coverage((ref, start, end, "+", val), multiplier=1.0)
             correctcov = correct1[start:end,0:4].sum(axis=1) / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
-            mydens = t.density((ref, start, end, 0, val), multiplier=1.0)
+            mydens = t.density((ref, start, end, "+", val), multiplier=1.0)
             correctdens = correctcount / float(total_cov * (end - start))
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))
             # check minus strand
-            mycount = t.count((ref, start, end, 1, val))
+            mycount = t.count((ref, start, end, "-", val))
             correctcount = correct1[start:end,4:8].sum()
             self.assertAlmostEqual(mycount, correctcount)
-            mycov = t.coverage((ref, start, end, 1, val), multiplier=1.0)
+            mycov = t.coverage((ref, start, end, "-", val), multiplier=1.0)
             correctcov = correct1[start:end,4:8].sum(axis=1) / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
-            mydens = t.density((ref, start, end, 1, val), multiplier=1.0)
+            mydens = t.density((ref, start, end, "-", val), multiplier=1.0)
             correctdens = correctcount / float(total_cov * (end - start))
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))            
             # check both strands
-            mycount = t.count((ref, start, end, 2, val))
+            mycount = t.count((ref, start, end, ".", val))
             correctcount = correct1[start:end].sum()
             self.assertAlmostEqual(mycount, correctcount)
-            mycov = t.coverage((ref, start, end, 2, val), multiplier=1.0)
+            mycov = t.coverage((ref, start, end, ".", val), multiplier=1.0)
             correctcov = correct1[start:end].sum(axis=1) / float(total_cov)
             self.assertTrue(np.allclose(mycov, correctcov, atol=1e-4))
-            mydens = t.density((ref, start, end, 2, val), multiplier=1.0)
+            mydens = t.density((ref, start, end, ".", val), multiplier=1.0)
             correctdens = correctcount / float(total_cov * (end - start))
             self.assertTrue(np.allclose(mydens, correctdens, atol=1e-4))
 
