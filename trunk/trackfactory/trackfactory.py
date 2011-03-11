@@ -14,8 +14,8 @@ from coveragetrack import CoverageTrack
 from bitarraytrack import BitArrayTrack
 from sequencetrack import SequenceTrack
 from intervaltrack import IntervalTrack
+from featuretrack import FeatureTrack
 from rnaseqtrack import RnaseqTrack
-#from sequel2.track.featuretrack import FeatureTrack
 #from sequel2.track.expressiontrack import ExpressionTrack
 
 def _open_hdf_file(filename, mode='r'):
@@ -62,6 +62,7 @@ class TrackFactory(object):
                      BitArrayTrack,
                      SequenceTrack, 
                      IntervalTrack,
+                     FeatureTrack,
                      RnaseqTrack]
     track_name_class_dict = dict((cls.__name__, cls) for cls in track_classes)
 

@@ -13,7 +13,7 @@ import tables
 import numpy as np
 from track import Track, TrackError, parse_interval
 from io.interval import write_interval_data_to_array
-from io.bedgraph import array_to_bedgraph
+from io.cbedgraph import array_to_bedgraph
 
 DTYPE_ATTR = 'dtype'
 CHANNELS_ATTR = 'channels'
@@ -93,25 +93,28 @@ class ArrayTrack(Track):
             raise TrackError("index out of bounds '(%d,%d)'" % (start,end))
 
     def __getitem__(self, key):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         return arr[start:end]
     
     def __setitem__(self, key, value):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         arr[start:end] = value
 
     def count(self, interval, channel=None):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end, channel)
         return np.sum(arr[start:end,channel])
         
     def tobedgraph(self, interval, fileh, span=1, factor=1.0, channel=None):
-        if span < 1: span = 1
-        ref, start, end, strand = parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
         if ref is None: 
             rnames = self.get_rnames()
         else:
             rnames = [ref]
+        if span < 1: span = 1
         if start is None: start = 0
         if end is None: end = -1
         if channel is None: channel = 0

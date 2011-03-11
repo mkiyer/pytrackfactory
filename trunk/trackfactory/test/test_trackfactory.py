@@ -10,6 +10,7 @@ Created on September 8, 2010
 import unittest
 import tempfile
 import os
+import numpy as np
 
 from ..track import TrackError
 from ..trackfactory import TrackFactory
@@ -47,26 +48,28 @@ class TestReferences(unittest.TestCase):
 
     def test_track_factory(self):
         refs = (('gene1', 100000), ('gene2', 10))
+        a = np.arange(10)
+        a.resize((10,1))        
         tf = TrackFactory(self.filename, 'w', refs=refs) 
         t = tf.create_track("a", ArrayTrack, "i4")
-        t['gene2'] = range(10)        
+        t['gene2'] = a
         for i in range(10):
-            self.assertEqual(t[('gene2', i)], i)        
+            self.assertEqual(t[('gene2', i)][0], i)        
         # assert cannot create same track twice
         self.assertRaises(TrackError, tf.create_track, "a", ArrayTrack, "i4")
         self.assertTrue(tf.has_track("a"))
         # delete and recreate track
         tf.delete_track("a")
         t = tf.create_track("a", ArrayTrack, "i4")
-        t['gene2'] = range(10)
+        t['gene2'] = a
         for i in range(10):
-            self.assertEqual(t[('gene2', i)], i)        
+            self.assertEqual(t[('gene2', i)][0], i)        
         tf.close()
         # test persistence of data
         tf = TrackFactory(self.filename)
         t = tf.get_track("a")
         for i in range(10):
-            self.assertEqual(t[('gene2', i)], i)
+            self.assertEqual(t[('gene2', i)][0], i)
         tf.close() 
 
 

@@ -105,6 +105,8 @@ class IntervalTrack(Track):
 
     def _get_dtype(self):
         return self.hdf_group._v_attrs[DTYPE_ATTR]
+    def _get_interval_table(self):
+        return self.hdf_group._f_getChild(INTERVAL_TABLE)
 
     def _init_table(self, dtype, expectedrows):
         if expectedrows is None:

@@ -8,6 +8,33 @@ cimport numpy as np
 cimport cython
 cimport libc.stdio as stdio
 
+cdef class Interval:
+    """
+    Basic interval class
+    
+    Based on bx-python Interval class by James Taylor
+    """
+    cdef public int start, end, strand
+    cdef public object value, chrom
+
+    def __init__(self, int start, int end, object value=None, object chrom=None, object strand=None ):
+        assert start <= end, "start must be less than end"
+        self.start  = start
+        self.end   = end
+        self.value = value
+        self.chrom = chrom
+        self.strand = strand
+
+    def __repr__(self):
+        fstr = "Interval(%d, %d" % (self.start, self.end)
+        if not self.value is None:
+            fstr += ", value=" + str(self.value)
+        fstr += ")"
+        return fstr
+
+    def __cmp__(self, other):
+        return cmp( self.start, other.start ) or cmp( self.end, other.end )
+    
 cdef class IntervalToArrayChunks:
     cdef object chunk_chrom
     cdef int chunk_start

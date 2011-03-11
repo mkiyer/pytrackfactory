@@ -24,6 +24,8 @@ def parse_bed6(line_iter, sep="\t"):
         strand = fields[5]
         yield ref, start, end, name, strand, score
 
+
+
 #def parse_bed12_line(line):
 #    if line is None:
 #        return None
