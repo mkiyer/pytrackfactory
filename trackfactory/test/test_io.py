@@ -9,6 +9,7 @@ import numpy as np
 
 from trackfactory.io.sequence import parse_fasta_as_chunks
 from trackfactory.io.interval import write_interval_data_to_array
+from trackfactory.io.cinterval import Interval
 
 class TestIO(unittest.TestCase):
 
@@ -63,7 +64,7 @@ class TestIO(unittest.TestCase):
             intervals = []
             val = 0
             for start in xrange(0, endpos, intervalsize):
-                intervals.append((ref, start, start+intervalsize, "+", val))
+                intervals.append(Interval(ref, start, start+intervalsize, "+", val))
                 fullarr[start:start+intervalsize,0] = val
                 val += 2
             # test different chunk sizes
@@ -73,7 +74,8 @@ class TestIO(unittest.TestCase):
                                              {"chr1": testarr}, 
                                              dtype=dtype, 
                                              channel=0,
-                                             chunksize=chunksize)
+                                             chunksize=chunksize,
+                                             mode="channel")
                 self.assertTrue(np.all(testarr == fullarr))   
         #
         # test intervals on different chromosomes
@@ -90,7 +92,7 @@ class TestIO(unittest.TestCase):
             val = 0
             for start in xrange(0, endpos, intervalsize):
                 ref = refiter.next()
-                intervals.append((ref, start, start+intervalsize, "+", val))
+                intervals.append(Interval(ref, start, start+intervalsize, "+", val))
                 fullarr[ref][start:start+intervalsize] = val
                 val += 2
             # test different chunk sizes
@@ -102,7 +104,8 @@ class TestIO(unittest.TestCase):
                                              testarr, 
                                              dtype=dtype, 
                                              channel=0,
-                                             chunksize=chunksize)
+                                             chunksize=chunksize,
+                                             mode="channel")
                 for chrom in testarr:
                     self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))
 

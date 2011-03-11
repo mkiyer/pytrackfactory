@@ -8,9 +8,10 @@ import tempfile
 import os
 import numpy as np
 
-from ..track import TrackError
-from ..trackfactory import TrackFactory
-from ..arraytrack import ArrayTrack
+from trackfactory.track import TrackError
+from trackfactory.trackfactory import TrackFactory
+from trackfactory.arraytrack import ArrayTrack
+from trackfactory.io.cinterval import Interval
 
 def mktemp(prefix, suffix):
     fh, filename = tempfile.mkstemp(suffix=suffix, prefix=prefix)
@@ -23,7 +24,7 @@ def random_intervals(n, length, isize_max, dtype):
     for i in xrange(1000):
         start = np.random.randint(0, 100000-isize_max)
         end = start + np.random.randint(0, isize_max)
-        intervals.append(('gene1', start, end, ".", i, None))
+        intervals.append(Interval('gene1', start, end, strand=".", value=i))
         correct[start:end] += i
     return intervals, correct
     

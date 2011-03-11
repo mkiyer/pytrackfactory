@@ -22,7 +22,7 @@ from trackfactory.io.feature import parse_gtf_features
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
-from trackfactory.coveragetrack import CoverageTrack
+from trackfactory.vectortrack import VectorTrack
 from trackfactory.intervaltrack import IntervalTrack, get_bed_dtype_fields
 from trackfactory.featuretrack import FeatureTrack
 from trackfactory.rnaseqtrack import RnaseqTrack
@@ -31,6 +31,7 @@ ACTION_CREATE = "create"
 ACTION_ADD = "add"
 ACTION_REMOVE = "remove"
 ACTION_VIEW = "view"
+ACTION_LIST = "list"
 
 DESCRIPTION=("command-line tools for working with "
              "pytrackfactory tracks") 
@@ -70,6 +71,18 @@ def create_trackfactory(parser, options):
     tf.close()
     logging.info("created trackfactory %s using refs from %s (%s)" % 
                  (options.file, options.refs, options.refs_type))
+
+def list_tracks(parser, options):
+    if options.file is None:
+        parser.error("no filename specified")
+    if not os.path.exists(options.file):
+        parser.error("file '%s' not found" % (options.file))
+    tf = TrackFactory(options.file, "r")
+    print '\t'.join(["track_name", "track_type"])
+    print '\t'.join(["==========", "=========="])
+    for t in tf:
+        print '\t'.join(t)
+    tf.close()
 
 def remove_track(parser, options):
     tf = TrackFactory(options.file, "r+")
@@ -123,9 +136,9 @@ def add_array_track(parser, options):
 
 def add_coverage_track(parser, options):
     tf = open_trackfactory(parser, options)
-    t = tf.create_track(options.name, CoverageTrack)
+    t = tf.create_track(options.name, VectorTrack)
     logging.info("added %s '%s' to trackfactory %s" %
-                 (CoverageTrack.__name__, options.name, options.file))
+                 (VectorTrack.__name__, options.name, options.file))
     datafile = check_datafile(parser, options)
     if datafile is not None:
         logging.info("inserting data file %s (type=%s)" % 
@@ -206,7 +219,7 @@ def view_track(parser, options):
             t.tobedgraph(region, sys.stdout)
         else:
             print t[region]
-    elif track_type == CoverageTrack.__name__:
+    elif track_type == VectorTrack.__name__:
         if options.file_type == "bedgraph":
             t.tobedgraph(region, sys.stdout)
         else:
@@ -272,6 +285,13 @@ def main():
                                               description="valid track types",
                                               help="")
     #
+    # create parser for "list" command
+    #
+    subparser = subparsers.add_parser(ACTION_LIST, 
+                                      help="list available tracks")
+    subparser.add_argument('file', help='trackfactory file')
+    subparser.set_defaults(func=list_tracks)
+    #
     # add a SequenceTrack
     # 
     parser_seq = addsubparsers.add_parser(SequenceTrack.__name__,
@@ -309,10 +329,10 @@ def main():
     parser_arr.set_defaults(func=add_array_track,
                             file_type="wiggle")
     #
-    # add a CoverageTrack
+    # add a VectorTrack
     #
-    parser_cov = addsubparsers.add_parser(CoverageTrack.__name__,
-                                          help='coverage track')
+    parser_cov = addsubparsers.add_parser(VectorTrack.__name__,
+                                          help='vector of numeric values')
     parser_cov.add_argument("--bam", dest="file_type",
                             action="store_const", const="bam",
                             help="data file is in BAM format")
@@ -388,7 +408,7 @@ def main():
     # create parser for "view" command
     #
     parser_view = subparsers.add_parser(ACTION_VIEW, 
-                                       help="view data in a track")
+                                        help="view data in a track")
     parser_view.add_argument('--bedgraph', action="store_const", 
                              const="bedgraph", dest="file_type", 
                              help="output data in bedgraph format")

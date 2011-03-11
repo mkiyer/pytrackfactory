@@ -3,6 +3,7 @@ Created on Mar 8, 2011
 
 @author: mkiyer
 '''
+from io.cinterval import BedInterval, strand_str_to_int
 
 def parse_bed6(line_iter, sep="\t"):
     for line in line_iter:
@@ -21,9 +22,9 @@ def parse_bed6(line_iter, sep="\t"):
         end = int(fields[2])
         name = fields[3]        
         score = int(fields[4])
-        strand = fields[5]
-        yield ref, start, end, name, strand, score
-
+        strand = strand_str_to_int(fields[5])
+        yield BedInterval(ref, start, end, strand=strand, value=score,
+                          name=name) 
 
 
 #def parse_bed12_line(line):

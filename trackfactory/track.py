@@ -142,7 +142,11 @@ def _parse_interval_tuple(interval):
     elif len(interval) == 3:
         return interval[0], interval[1], interval[2], NO_STRAND
     else:
-        strand = strand_str_to_int(interval[3])
+        if isinstance(interval[3], basestring):
+            strand = strand_str_to_int(interval[3])
+        else:
+            strand = interval[3]
+        assert (strand >= POS_STRAND) and (strand <= NO_STRAND)
         return interval[0], interval[1], interval[2], strand
 
 def parse_interval(interval):

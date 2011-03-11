@@ -12,11 +12,12 @@ import tables
 import logging
 import operator
 import numpy as np
-from track import TrackError, parse_interval, NO_STRAND, POS_STRAND, NEG_STRAND
+from track import TrackError, NO_STRAND, POS_STRAND, NEG_STRAND
 from arraytrack import ArrayTrack
-from io.interval import write_interval_data_to_array, \
-    write_interval_data_to_stranded_array, \
-    write_interval_data_to_stranded_allele_array
+from io.interval import write_interval_data_to_array
+#from io.interval import write_interval_data_to_array, \
+#    write_interval_data_to_stranded_array, \
+#    write_interval_data_to_stranded_allele_array
 from io.bedgraph import array_to_bedgraph
 
 _vector_dtypes = {"i": np.int32,
@@ -101,8 +102,9 @@ class VectorTrack(ArrayTrack):
             write_interval_data_to_array(interval_iter, 
                                          rname_array_dict, 
                                          dtype=self._get_dtype(),
-                                         channel=channel,                                     
-                                         chunksize=(self.h5_chunksize << 4))
+                                         chunksize=(self.h5_chunksize << 4),
+                                         mode="channel",
+                                         channel=channel)                                         
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
@@ -122,10 +124,15 @@ class StrandedVectorTrack(VectorTrack):
     def fromintervals(self, interval_iter):
         rname_array_dict = self._get_arrays()
         intervals, total_cov = \
-            write_interval_data_to_stranded_array(interval_iter, 
-                                                  rname_array_dict, 
-                                                  dtype=self._get_dtype(),
-                                                  chunksize=(self.h5_chunksize << 4))
+            write_interval_data_to_array(interval_iter, 
+                                         rname_array_dict, 
+                                         dtype=self._get_dtype(),
+                                         chunksize=(self.h5_chunksize << 4),
+                                         mode="strand")
+#            write_interval_data_to_stranded_array(interval_iter, 
+#                                                  rname_array_dict, 
+#                                                  dtype=self._get_dtype(),
+#                                                  chunksize=(self.h5_chunksize << 4))
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
@@ -146,10 +153,15 @@ class StrandedAlleleVectorTrack(StrandedVectorTrack):
     def fromintervals(self, interval_iter):
         rname_array_dict = self._get_arrays()
         intervals, total_cov = \
-            write_interval_data_to_stranded_allele_array(interval_iter, 
-                                                         rname_array_dict, 
-                                                         dtype=self._get_dtype(), 
-                                                         chunksize=(self.h5_chunksize << 2))
+            write_interval_data_to_array(interval_iter, 
+                                         rname_array_dict, 
+                                         dtype=self._get_dtype(), 
+                                         chunksize=(self.h5_chunksize << 2),
+                                         mode="allele")
+#            write_interval_data_to_stranded_allele_array(interval_iter, 
+#                                                         rname_array_dict, 
+#                                                         dtype=self._get_dtype(), 
+#                                                         chunksize=(self.h5_chunksize << 2))
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
