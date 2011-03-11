@@ -100,13 +100,4 @@ class ArrayTrack(Track):
         ref, start, end, strand = self._parse_interval(key)
         arr = self._get_array(ref)
         arr[start:end] = value
-
-    def fromintervals(self, interval_iter, channel=0):
-        rname_array_dict = self._get_arrays()
-        intervals, total_cov = \
-            write_interval_data_to_array(interval_iter, 
-                                         rname_array_dict, 
-                                         dtype=self._get_dtype(),
-                                         chunksize=(self.h5_chunksize << 4),
-                                         mode="channel",
-                                         channel=channel)                                         
+                                       
