@@ -129,10 +129,6 @@ class StrandedVectorTrack(VectorTrack):
                                          dtype=self._get_dtype(),
                                          chunksize=(self.h5_chunksize << 4),
                                          mode="strand")
-#            write_interval_data_to_stranded_array(interval_iter, 
-#                                                  rname_array_dict, 
-#                                                  dtype=self._get_dtype(),
-#                                                  chunksize=(self.h5_chunksize << 4))
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
@@ -158,10 +154,6 @@ class StrandedAlleleVectorTrack(StrandedVectorTrack):
                                          dtype=self._get_dtype(), 
                                          chunksize=(self.h5_chunksize << 2),
                                          mode="allele")
-#            write_interval_data_to_stranded_allele_array(interval_iter, 
-#                                                         rname_array_dict, 
-#                                                         dtype=self._get_dtype(), 
-#                                                         chunksize=(self.h5_chunksize << 2))
         self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
         self.total_cov = total_cov
         self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
