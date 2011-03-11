@@ -17,9 +17,9 @@ _strand_str_to_int = {"+": POS_STRAND,
                       ".": NO_STRAND}
 _strand_int_to_str = dict([(v,k) for k,v in _strand_str_to_int.items()])
 def strand_str_to_int(strand):
-    return _strand_str_to_int[strand]
+    return _strand_str_to_int.get(strand, NO_STRAND)
 def strand_int_to_str(strand):
-    return _strand_int_to_str[strand]
+    return _strand_int_to_str.get(strand, NO_STRAND)
 
 REF_TRACK_NAME = 'references'
 REF_NODE_PATH = "/" + REF_TRACK_NAME
@@ -53,23 +53,32 @@ class Track(object):
     def __init__(self, hdf_group):
         self.hdf_group = hdf_group
 
+    def get_name(self):
+        return self.hdf_group._v_name
+    def get_type(self):
+        return self.hdf_group._v_attrs[TRACK_CLASS_ATTR]
     def _get_hdf_file(self):
         return self.hdf_group._v_file
     def _get_references_node(self):
         return self.hdf_group._v_file.getNode(REF_NODE_PATH)
     def _parse_interval(self, key):
         ref, start, end, strand = parse_interval(key)
-        if (ref not in self.hdf_group):
+        if ref is None:
+            return None, None, None, None
+        if not self.has_ref(ref): 
             raise TrackError("unknown reference '%s'" % (ref))
         if start is None:
             start = 0
         if end is None:
             end = self.get_ref_length(ref)        
-        ca = self.hdf_group._f_getChild(ref)
-        return ca, start, end, strand
+        return ref, start, end, strand
 
-    def get_type(self):
-        return self.hdf_group._v_attrs[TRACK_CLASS_ATTR]
+    def has_ref(self, ref):
+        res = False
+        tbl = self._get_references_node()
+        for r in tbl.where('name == ref'):
+            return True
+        return False
 
     def get_ref_length(self, ref):
         """return the size of the reference `ref`"""
@@ -120,7 +129,7 @@ def _parse_interval_string(interval):
     if strand is None: 
         strand = NO_STRAND
     else:
-        strand = _strand_str_to_int[strand]
+        strand = strand_str_to_int(strand)
     return ref, start, end, strand
 
 def _parse_interval_tuple(interval):
@@ -133,7 +142,8 @@ def _parse_interval_tuple(interval):
     elif len(interval) == 3:
         return interval[0], interval[1], interval[2], NO_STRAND
     else:
-        return interval[:4]
+        strand = strand_str_to_int(interval[3])
+        return interval[0], interval[1], interval[2], strand
 
 def parse_interval(interval):
     """parses a genomic interval specifier in either the string

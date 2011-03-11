@@ -119,10 +119,15 @@ class BitArrayTrack(Track):
         # compress back into the numpy array
         arr[startbyte:endbyte] = np.fromstring(frameba.tostring(), dtype=np.byte)
 
+    def _get_array(self, ref):
+        return self.hdf_group._f_getChild(ref)
+
     def __getitem__(self, key):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         return self._read(arr, start, end)
 
     def __setitem__(self, key, value):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         self._write(arr, start, end, value)

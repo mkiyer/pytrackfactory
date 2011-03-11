@@ -8,16 +8,13 @@ Created on Sep 14, 2010
 
 @author: mkiyer
 '''
-#import logging
+import logging
 #import collections
 #import operator
-import tables
-import numpy as np
 from bitarray import bitarray
 
-from track import Track, TrackError, NEG_STRAND, parse_interval
-from bitarraytrack import BitArrayTrack, translate_bpb, frame_bpb, \
-    DTYPE_ATTR, BPB_ATTR
+from track import TrackError, NEG_STRAND
+from bitarraytrack import BitArrayTrack
 from io.sequence import parse_fasta_as_chunks, dna_reverse_complement
 
 _encode_dict_2bpb = {'N': bitarray('00'),
@@ -107,11 +104,13 @@ class SequenceTrack(BitArrayTrack):
         BitArrayTrack._write(self, arr, start, end, b)
 
     def __getitem__(self, key):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         return self._read(arr, start, end, strand)
 
     def __setitem__(self, key, value):
-        arr, start, end, strand = self._parse_interval(key)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         self._write(arr, start, end, strand, value)
 
     def fromfasta(self, line_iter, ref=None, start=None, end=None,
@@ -126,19 +125,20 @@ class SequenceTrack(BitArrayTrack):
         You can use this function to import entire chromosomes (or genomes)
         as inserting into the track is done in a efficient, chunked fashion
         """
-        import logging
-        rnames = set(self.get_rnames())
-        for tag, start, end, seq in parse_fasta_as_chunks(line_iter):
-            logging.debug("%s:%d-%d" % (tag, start, end))
+        for tag, tag_start, tag_end, seq in parse_fasta_as_chunks(line_iter):
+            logging.debug("%s:%d-%d" % (tag, tag_start, tag_end))
             if ref is None:
                 if split_tag:
                     tag = tag.split(None,1)[0]
-                rname, start, end, strand = parse_interval(tag)
-                if rname not in rnames:
-                    logging.warning("[SequenceTrack] SKIPPING ref '%s'" % (rname))
+                try:
+                    ref, arr_start, arr_end, strand = \
+                        self._parse_interval(tag)
+                except TrackError as e:                    
+                    logging.warning("[SequenceTrack] %s" % (str(e)))
                     continue
-                arr, arr_start, arr_end, strand = self._parse_interval(tag)
-                self._write(arr, arr_start + start, arr_start + end, strand, seq)
             else:
-                arr, arr_start, arr_end, strand = self._parse_interval((ref, start, end))
-                self._write(arr, arr_start + start, arr_start + end, strand, seq)
+                ref, arr_start, arr_end, strand = self._parse_interval((ref, start, end))
+            write_start = arr_start + tag_start
+            write_end = arr_start + tag_end
+            arr = self._get_array(ref)
+            self._write(arr, write_start, write_end, strand, seq)

@@ -9,7 +9,9 @@ import tempfile
 import os
 import StringIO
 
-from trackfactory.io.bedgraph import array_to_bedgraph, bedgraph_to_array
+from trackfactory.io.cbedgraph import array_to_bedgraph
+#from trackfactory.io.bedgraph import array_to_bedgraph
+from trackfactory.io.bedgraph import bedgraph_to_array
 
 def interval(ref, start, end, cov):
     return "%s\t%d\t%d\t%.2f\n" % (ref, start, end, cov)

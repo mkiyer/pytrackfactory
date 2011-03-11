@@ -12,14 +12,8 @@ import os
 import operator
 import collections
 
-from track import Track, TrackError
-from trackfactory import TrackFactory
+from track import Track
 from featuretrack import FeatureTrack, EXON_TYPE, TRANSCRIPT_TYPE, GENE_TYPE
-
-def make_temp(prefix, suffix, dir):
-    fd, tmpfilename = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
-    os.close(fd)
-    return tmpfilename
 
 FEATURE_TRACK_LINK = "feature_track_link"
 SEQDATA_TABLE = "seqdata"
@@ -39,29 +33,29 @@ props_dtype = np.dtype([('index', '<u4'),
                         ('name', 'a64'), 
                         ('value', 'a256')])
 
-def fetch_counts(vector_track_file, vector_track_name, feature_track_file, feature_track_name):
-    logging.debug("Vector track file: %s" % vector_track_file)
-    logging.debug("Vector track name: %s" % vector_track_name)
+def fetch_counts(pileup_track_file, pileup_track_name, feature_track_file, feature_track_name):
+    from sequel2.track.trackfactory import TrackFactory
+    logging.debug("Pileup track file: %s" % pileup_track_file)
+    logging.debug("Pileup track name: %s" % pileup_track_name)
     logging.debug("Feature track file: %s" % feature_track_file)
     logging.debug("Feature track name: %s" % feature_track_name)
-    # open files and get tracks
-    vector_tf = TrackFactory(vector_track_file, "r")
-    vectortrack = vector_tf.get_track(vector_track_name)
+
+    pileup_tf = TrackFactory(pileup_track_file, "r")
+    pileuptrack = pileup_tf.get_track(pileup_track_name)
     feature_tf = TrackFactory(feature_track_file, "r")
-    featuretrack = feature_tf.get_track(feature_track_name)
-    # allocate array to store temporary expression    
+    featuretrack = feature_tf.get_track(feature_track_name)    
     arr = np.zeros(featuretrack.num_intervals, dtype=np.float)
     # index parent/child associations for fast lookup
-    logging.debug("%s: indexing features" % (vector_track_file))
+    logging.debug("%s: indexing features" % (pileup_track_file))
     parent_id_dict, child_id_dict = featuretrack.index_assoc()
-    logging.debug("%s: counting regions" % (vector_track_file))
+    logging.debug("%s: counting regions" % (pileup_track_file))
     debug_count = 0
     debug_every = 10000
     debug_next = debug_every
     for feature in featuretrack:
         if feature['feature_type'] == EXON_TYPE:
             interval = (feature['ref'], feature['start'], feature['end'])
-            count = vectortrack.count(interval)
+            count = pileuptrack.count(interval)
             arr[feature['id']] = count
             #logging.debug("Exon id=%d count=%f" % (feature['id'], count))
             for parent_id,exon_num in parent_id_dict[feature['id']]:
@@ -69,10 +63,10 @@ def fetch_counts(vector_track_file, vector_track_name, feature_track_file, featu
                 #logging.debug("Transcript id=%d count=%f" % (parent_id, arr[parent_id]))
         debug_count += 1
         if debug_count == debug_next:
-            logging.debug("%s: Finished counting %d features" % (vector_track_file, debug_count))
+            logging.debug("%s: Finished counting %d features" % (pileup_track_file, debug_count))
             debug_next += debug_every
     feature_tf.close()
-    vector_tf.close()
+    pileup_tf.close()
     return arr
 
 def fetch_counts_worker(arglist):
@@ -95,8 +89,7 @@ class ExpressionTrack(Track):
         h5file = self._get_hdf_file()
         # link to feature track        
         if not FEATURE_TRACK_LINK in self.hdf_group:
-            if feature_track is None:
-                raise TrackError("'feature_track' param invalid, got '%s'" % (feature_track))
+            assert feature_track is not None
             h5file.createSoftLink(self.hdf_group, FEATURE_TRACK_LINK, feature_track.hdf_group)
         # create table for sequence data
         if not SEQDATA_TABLE in self.hdf_group:
@@ -108,8 +101,7 @@ class ExpressionTrack(Track):
                                expectedrows=self._expected_seqdata_rows)
         # create expression matrix array
         if not EXPRMAT_ARRAY in self.hdf_group:
-            if feature_track is None:
-                raise TrackError("'feature_track' param invalid, got '%s'" % (feature_track))
+            assert feature_track is not None
             shape = (feature_track.num_intervals,0)            
             atom = tables.Atom.from_dtype(np.dtype(self._expr_data_dtype))
             h5file.createEArray(self.hdf_group, EXPRMAT_ARRAY,
@@ -121,37 +113,34 @@ class ExpressionTrack(Track):
     def _get_feature_track(self):
         return FeatureTrack(self.hdf_group.feature_track_link())
 
-    def add_vector_tracks(self, seqdata_line_iter, processes=1):
+    def add_pileup_tracks(self, seqdata_line_iter, processes=1):
         # copy the feature track file so it can be opened by 
         # multiple processes in read-only mode
         h5file = self._get_hdf_file()
-        ftrack = self._get_feature_track()
-        ftrack_name = ftrack.get_name()
-        logging.debug("Creating temporary copy of file '%s'" % (h5file.filename))
-        # open temp file and copy feature track
-        ftrack_file = make_temp(suffix=".h5", prefix="ftrack", dir=os.path.dirname(h5file.filename))        
-        f2 = tables.openFile(ftrack_file, 'w')
-        new_ftrack = ftrack._f_copy(f2.root, ftrack_name, recursive=True)
-        f2.close()
-        # setup list of counting tasks
-        exprmat = self.hdf_group.exprmat
+        filename = h5file.filename
+        feature_track_name = self._get_feature_track().hdf_group._v_name
+        fd, tmpfilename = tempfile.mkstemp(suffix=".h5", prefix="tmptrack", dir=os.path.dirname(filename))
+        os.close(fd)
+        logging.debug("Creating temporary copy of feature track file %s" % (filename))
+        h5file.copyFile(tmpfilename, overwrite=True)
+        # setup list of pileup counting tasks
         tasklist = []
+        exprmat = self.hdf_group.exprmat
+
         # make field index lists
         header_fields = seqdata_line_iter.next().strip().split('\t')
-        seqdata_fields = set(seqdata_dtype.names).difference(set(['index']))       
+        seqdata_fields = set(seqdata_dtype.names).difference(set(['index']))
+
+        print 'HEADER', header_fields
+        print 'SEQDATA_FIELDS', seqdata_fields
+        
         seqdata_field_indexes = [header_fields.index(f) for f in seqdata_fields]
-        data_path_index = header_fields.index('track_path')         
+        data_path_index = header_fields.index('pileup_track_file')         
         prop_field_indexes = set(range(len(header_fields)))
-        prop_field_indexes.difference_update(seqdata_field_indexes + [data_path_index])        
-        # setup individual tasks
+        prop_field_indexes.difference_update(seqdata_field_indexes + [data_path_index])
+        
         for line in seqdata_line_iter:
             fields = line.strip().split('\t')
-            # get and validate data path
-            data_path = fields[data_path_index]
-            file_path, h5_path = data_path.split(":")
-            if not os.path.isfile("file_path"):
-                logging.error("file path '%s' not found" % (file_path))
-                continue
             # add to metadata
             tbl = self.hdf_group.seqdata
             row = tbl.row
@@ -170,12 +159,14 @@ class ExpressionTrack(Track):
                 row['value'] = fields[ind]
                 row.append()
             tbl.flush()        
+            # get data path
+            data_path = fields[data_path_index]
             # add to earray
             exprmat.append(np.zeros((exprmat.shape[0],1), dtype=self._expr_data_dtype))
             # add to list of tasks
             logging.debug("Adding task index=%d data_path=%s track=%s feature_file=%s feature_track=%s" % 
-                          (index, data_path, h5_path, ftrack_file, ftrack_name))
-            tasklist.append((index, data_path, h5_path, ftrack_file, ftrack_name))
+                          (index, data_path, "coverage", tmpfilename, feature_track_name))
+            tasklist.append((index, data_path, "coverage", tmpfilename, feature_track_name))
         logging.debug("Number of sequence data files: %d" % len(tasklist))
         logging.debug("Number of features: %d" % exprmat.shape[0])
         # kickoff jobs on multiple processors to count reads on each of the genes        
@@ -185,9 +176,8 @@ class ExpressionTrack(Track):
             exprmat[:,index] = arr
             logging.debug("Finished task index=%d" % (index))
         pool.close()
-        pool.join()
-        # remove temp feature track 
-        os.remove(ftrack_file)
+        pool.join()        
+        os.remove(tmpfilename)
 
     def _get_feature_length(self, feature):
         featuretrack = self._get_feature_track()
@@ -199,8 +189,7 @@ class ExpressionTrack(Track):
                 length += child['end'] - child['start']
             return length
         else:
-            # TODO: need a recursive function for gene level
-            return 1
+            assert False
     
     def group_matrix(self, group_by="library"):
         seqdata_tbl = self.hdf_group.seqdata
@@ -311,3 +300,62 @@ class ExpressionTrack(Track):
                 lines = sorted(lines, key=operator.itemgetter(5))
                 for fields in lines:
                     print >>outfh, '\t'.join(map(str, fields))
+
+#    def write_tabular_text(self, outfh, index=True, rpkm=False):
+#        featuretrack = self._get_feature_track()
+#        if index:
+#            featuretrack.index_assoc()
+#            featuretrack.index_aliases()
+#        # get sequence metadata rows
+#        seqdata_tbl = self.hdf_group.seqdata        
+#        num_seqdata = seqdata_tbl.nrows
+#        num_seq_arr = seqdata_tbl.col('num_sequences')
+#        num_seq_norm = 1.0e6 / num_seq_arr
+#        # store expression matrix in memory
+#        exprmat = np.array(self.hdf_group.exprmat[:])        
+#
+#        # write primary header and metadata
+#        header = ["id", "feature_type", "aliases", "genomic_coords", "feature_size", "exon_num"]
+#        print >>outfh, '\t'.join(header + list(seqdata_tbl.col('seqdata')))
+#        for fieldname in seqdata_dtype.names:
+#            padding = [''] * (len(header) - 1)                        
+#            print >>outfh, '\t'.join(padding + [fieldname] + list(map(str, seqdata_tbl.col(fieldname))))
+#
+#        # write property metadata
+#        props_tbl = self.hdf_group.props
+#        props_dict = collections.defaultdict(lambda: ["None"] * num_seqdata)       
+#        for row in props_tbl:
+#            props_dict[row['name']][row['index']] = row['value']
+#        for prop_name, prop_values in props_dict.iteritems():
+#            padding = [''] * (len(header) - 1)                        
+#            print >>outfh, '\t'.join(padding + [prop_name] + prop_values) 
+#
+#        def write_feature(f, name, length, exon_num=-1, rpkm=False):
+#            cols = [f['id'], 
+#                    f['feature_type'],
+#                    name,
+#                    "%s:%d-%d_%s" % (f['ref'], f['start'], f['end'], f['strand']),
+#                    length,
+#                    exon_num]
+#            exprs = exprmat[f['id'],:]
+#            if rpkm:
+#                exprs = (1e3 * exprs / length) * num_seq_norm
+#            cols.extend(["%.3f" % x for x in exprs])
+#            return cols
+#
+#        # index features for fast lookup
+#        for feature in featuretrack:
+#            if feature['feature_type'] == TRANSCRIPT_TYPE:     
+#                alias_string = '|'.join(["%s=%s" % (a['source'],a['name']) for a in featuretrack.get_feature_aliases(feature['id'])])
+#                tx_length = 0
+#                # output children first
+#                lines = []
+#                for child,exon_num in featuretrack.get_children(feature['id']):
+#                    exon_length = child['end'] - child['start']
+#                    tx_length += exon_length 
+#                    lines.append(write_feature(child, alias_string, exon_length, exon_num, rpkm=rpkm))
+#                # output parent
+#                lines.append(write_feature(feature, alias_string, tx_length, len(lines), rpkm=rpkm))
+#                lines = sorted(lines, key=operator.itemgetter(5))
+#                for fields in lines:
+#                    print >>outfh, '\t'.join(map(str, fields))

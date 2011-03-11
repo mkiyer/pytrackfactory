@@ -17,12 +17,14 @@ from trackfactory.track import get_refs_from_sam, get_refs_from_bam, \
 from trackfactory.io.cwiggle import WiggleReader
 from trackfactory.io.bed import parse_bed6
 from trackfactory.io.sam import BamCoverageIterator, BamCoverageStatistics
+from trackfactory.io.feature import parse_gtf_features
 
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
 from trackfactory.coveragetrack import CoverageTrack
 from trackfactory.intervaltrack import IntervalTrack, get_bed_dtype_fields
+from trackfactory.featuretrack import FeatureTrack
 from trackfactory.rnaseqtrack import RnaseqTrack
 
 ACTION_CREATE = "create"
@@ -122,7 +124,7 @@ def add_array_track(parser, options):
 def add_coverage_track(parser, options):
     tf = open_trackfactory(parser, options)
     t = tf.create_track(options.name, CoverageTrack)
-    logging.info("added %s %s to trackfactory %s" %
+    logging.info("added %s '%s' to trackfactory %s" %
                  (CoverageTrack.__name__, options.name, options.file))
     datafile = check_datafile(parser, options)
     if datafile is not None:
@@ -153,15 +155,29 @@ def add_interval_track(parser, options):
         dtype = np.dtype(get_bed_dtype_fields())
         t = tf.create_track(options.name, IntervalTrack, 
                             dtype=dtype)
+        logging.info("added %s '%s' to trackfactory %s" %
+                     (IntervalTrack.__name__, options.name, options.file))
         if datafile is not None:
-            logging.info("inserting data file %s (type=%s)" % 
+            logging.info("inserting data file '%s' (type=%s)" % 
                          (options.data_file, options.file_type))
             t.fromintervals(parse_bed6(open(options.data_file)),
                             index=True)
-    logging.info("added %s %s to trackfactory %s" %
-                 (IntervalTrack.__name__, options.name, options.file))
     tf.close()
 
+def add_feature_track(parser, options):
+    datafile = check_datafile(parser, options)
+    tf = open_trackfactory(parser, options)
+    t = tf.create_track(options.name, FeatureTrack)
+    logging.info("added %s '%s' to trackfactory %s" %
+                 (FeatureTrack.__name__, options.name, options.file))
+    if datafile is not None:
+        if options.file_type == "gtf":
+            logging.info("inserting data file '%s' (type=%s)" % 
+                         (options.data_file, options.file_type))
+            t.fromfeatures(parse_gtf_features(open(options.data_file)),
+                           source=options.source)
+    tf.close()
+    
 def add_rnaseq_track(parser, options):
     tf = open_trackfactory(parser, options)
     t = tf.create_track(options.name, RnaseqTrack)
@@ -172,7 +188,7 @@ def add_rnaseq_track(parser, options):
                      (options.bam_file, options.bed_file))
         t.fromtophat(options.bam_file, options.bed_file)
     tf.close()
-
+    
 def view_track(parser, options):
     tf = TrackFactory(options.file, "r")
     if not tf.has_track(options.name):
@@ -339,7 +355,24 @@ def main():
                            "insert into track")    
     subparser.set_defaults(func=add_interval_track,
                            file_type="bed")
-    
+
+    #
+    # add a FeatureTrack
+    #
+    subparser = addsubparsers.add_parser(FeatureTrack.__name__,
+                                         help='interval track')
+    subparser.add_argument("--gtf", dest="file_type",
+                           action="store_const", const="gtf",
+                           help="data file is in GTF format")
+    subparser.add_argument("--source", default="default",
+                           help="(optional) name associated with data "
+                           "file (ex. 'ucsc')")
+    subparser.add_argument("data_file", default=None,
+                           help="(optional) file containing data to "
+                           "insert into track")    
+    subparser.set_defaults(func=add_feature_track,
+                           file_type="gtf")
+
     #
     # add an RnaseqTrack
     #
@@ -356,11 +389,11 @@ def main():
     #
     parser_view = subparsers.add_parser(ACTION_VIEW, 
                                        help="view data in a track")
-    parser_view.add_argument('file', help='trackfactory file')
-    parser_view.add_argument('name', help="track name")
     parser_view.add_argument('--bedgraph', action="store_const", 
                              const="bedgraph", dest="file_type", 
                              help="output data in bedgraph format")
+    parser_view.add_argument('file', help='trackfactory file')
+    parser_view.add_argument('name', help="track name")
     parser_view.add_argument('region', nargs="?", default=None, 
                              help="genomic region")
     parser_view.set_defaults(func=view_track,

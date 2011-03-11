@@ -59,19 +59,20 @@ class TestIO(unittest.TestCase):
         dtype = "i"
         # test different interval sizes
         for intervalsize in xrange(1,100,10):
-            fullarr = np.zeros(endpos+intervalsize, dtype=dtype)
+            fullarr = np.zeros((endpos+intervalsize,1), dtype=dtype)
             intervals = []
             val = 0
             for start in xrange(0, endpos, intervalsize):
                 intervals.append((ref, start, start+intervalsize, "+", val))
-                fullarr[start:start+intervalsize] = val
+                fullarr[start:start+intervalsize,0] = val
                 val += 2
             # test different chunk sizes
             for chunksize in xrange(chunkstep, endpos, chunkstep):
-                testarr = np.zeros(endpos+intervalsize, dtype=dtype)
+                testarr = np.zeros((endpos+intervalsize,1), dtype=dtype)
                 write_interval_data_to_array(iter(intervals), 
                                              {"chr1": testarr}, 
                                              dtype=dtype, 
+                                             channel=0,
                                              chunksize=chunksize)
                 self.assertTrue(np.all(testarr == fullarr))   
         #
@@ -82,9 +83,9 @@ class TestIO(unittest.TestCase):
                                                   itertools.repeat("chr3", 3)))                                        
         for intervalsize in (1,10,50,100):
             #print "intervalsize", intervalsize
-            fullarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
-                       "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}                       
+            fullarr = {"chr1":np.zeros((endpos+intervalsize,1), dtype=dtype),
+                       "chr2":np.zeros((endpos+intervalsize,1), dtype=dtype),
+                       "chr3":np.zeros((endpos+intervalsize,1), dtype=dtype)}                       
             intervals = []
             val = 0
             for start in xrange(0, endpos, intervalsize):
@@ -94,12 +95,13 @@ class TestIO(unittest.TestCase):
                 val += 2
             # test different chunk sizes
             for chunksize in (1, 8, 16, 32, 64, 128, 256, 512, 1024):
-                testarr = {"chr1":np.zeros(endpos+intervalsize, dtype=dtype),
-                           "chr2":np.zeros(endpos+intervalsize, dtype=dtype),
-                           "chr3":np.zeros(endpos+intervalsize, dtype=dtype)}
+                testarr = {"chr1":np.zeros((endpos+intervalsize,1), dtype=dtype),
+                           "chr2":np.zeros((endpos+intervalsize,1), dtype=dtype),
+                           "chr3":np.zeros((endpos+intervalsize,1), dtype=dtype)}
                 write_interval_data_to_array(iter(intervals),
                                              testarr, 
                                              dtype=dtype, 
+                                             channel=0,
                                              chunksize=chunksize)
                 for chrom in testarr:
                     self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))

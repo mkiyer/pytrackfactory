@@ -44,17 +44,20 @@ class CoverageTrack(ArrayTrack):
         return self.hdf_group._v_attrs[NUM_FEATURES_ATTR]
 
     def count(self, interval, strand=None):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(key)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         return np.sum(arr[start:end])
 
     def coverage(self, interval, multiplier=1.0e6):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         return arr[start:end] * (multiplier / self.total_cov)
 
     def density(self, interval, multiplier=1.0e9):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         return np.sum(arr[start:end]) * (multiplier / (self.total_cov * (end - start)))
 
@@ -91,12 +94,14 @@ class StrandedCoverageTrack(CoverageTrack):
             return arr[start:end,strand].sum()
         
     def count(self, interval):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         return self._count(arr, start, end, strand)
 
     def coverage(self, interval, multiplier=1.0e6):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         if strand == NO_STRAND:
             data = arr[start:end].sum(axis=1)
@@ -105,19 +110,20 @@ class StrandedCoverageTrack(CoverageTrack):
         return data * (multiplier / self.total_cov)
 
     def density(self, interval, multiplier=1.0e9):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         count = self._count(arr, start, end, strand)
         return count * (multiplier / (self.total_cov * (end - start)))
 
     def tobedgraph(self, interval, fileh, span=1, factor=1.0, 
                    norm=False, multiplier=1.0e6):
-        if span < 1: span = 1
-        ref, start, end, strand = parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
         if ref is None: 
             rnames = self.get_rnames()
         else:
             rnames = [ref]
+        if span < 1: span = 1
         if start is None: start = 0
         if end is None: end = -1
         if strand == NO_STRAND:
@@ -158,33 +164,30 @@ class StrandedAlleleCoverageTrack(StrandedCoverageTrack):
     def _count(self, arr, start, end, strand):
         channels = self._get_strand_channels(strand)
         return arr[start:end,channels].sum()
-        
-    def count(self, interval):
-        arr, start, end, strand = self._parse_interval(interval)
-        self._check_bounds(arr, start, end)
-        return self._count(arr, start, end, strand)
 
     def coverage(self, interval, multiplier=1.0e6):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         channels = self._get_strand_channels(strand)
         data = arr[start:end,channels].sum(axis=1)
         return data * (multiplier / self.total_cov)
 
     def density(self, interval, multiplier=1.0e9):
-        arr, start, end, strand = self._parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
+        arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
         count = self._count(arr, start, end, strand)
         return count * (multiplier / (self.total_cov * (end - start)))
 
     def tobedgraph(self, interval, fileh, span=1, factor=1.0, 
                    norm=False, multiplier=1.0e6):
-        if span < 1: span = 1
-        ref, start, end, strand = parse_interval(interval)
+        ref, start, end, strand = self._parse_interval(interval)
         if ref is None: 
             rnames = self.get_rnames()
         else:
             rnames = [ref]
+        if span < 1: span = 1
         if start is None: start = 0
         if end is None: end = -1
         if strand == NO_STRAND:
