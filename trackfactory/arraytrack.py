@@ -11,9 +11,8 @@ Created on Sep 14, 2010
 import logging
 import tables
 import numpy as np
-from track import Track, TrackError, parse_interval
+from track import Track, TrackError
 from io.interval import write_interval_data_to_array
-from io.cbedgraph import array_to_bedgraph
 
 DTYPE_ATTR = 'dtype'
 CHANNELS_ATTR = 'channels'
@@ -102,33 +101,11 @@ class ArrayTrack(Track):
         arr = self._get_array(ref)
         arr[start:end] = value
 
-    def count(self, interval, channel=None):
-        ref, start, end, strand = self._parse_interval(interval)
-        arr = self._get_array(ref)
-        self._check_bounds(arr, start, end, channel)
-        return np.sum(arr[start:end,channel])
-        
-    def tobedgraph(self, interval, fileh, span=1, factor=1.0, channel=None):
-        ref, start, end, strand = self._parse_interval(interval)
-        if ref is None: 
-            rnames = self.get_rnames()
-        else:
-            rnames = [ref]
-        if span < 1: span = 1
-        if start is None: start = 0
-        if end is None: end = -1
-        if channel is None: channel = 0
-        for rname in rnames:
-            array_to_bedgraph(rname, self._get_array(rname), fileh, 
-                              start=start, end=end, factor=factor, span=span,
-                              chunksize=self.h5_chunksize,
-                              channels=(channel,))
-
     def fromintervals(self, interval_iter, channel=0):
-        if channel is None: channel = 0
         rname_array_dict = self._get_arrays()
-        write_interval_data_to_array(interval_iter, 
-                                     rname_array_dict, 
-                                     dtype=self._get_dtype(),
-                                     channel=channel,                                     
-                                     chunksize=(self.h5_chunksize << 4))
+        intervals, total_cov = \
+            write_interval_data_to_array(interval_iter, 
+                                         rname_array_dict, 
+                                         dtype=self._get_dtype(),
+                                         channel=channel,                                     
+                                         chunksize=(self.h5_chunksize << 4))

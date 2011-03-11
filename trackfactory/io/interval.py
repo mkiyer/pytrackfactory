@@ -7,6 +7,16 @@ import numpy as np
 
 from trackfactory.track import POS_STRAND, NEG_STRAND, NO_STRAND
 
+def write_channel(dst, start, end, channel, strand, seq, value):
+    dst[start:end,channel] += value
+
+def write_strand(dst, start, end, channel, strand, seq, value):
+    if strand == NO_STRAND: 
+        channels = (0, 1)
+    else: 
+        channels = (strand,)
+    dst[start:end,channels] += (value / float(len(channels)))
+
 def write_interval_data_to_array(interval_iter, rname_array_dict, dtype, 
                                  channel, chunksize):
     # check params
@@ -160,6 +170,27 @@ def make_allele_array(start, end, strand, value, seq, dtype):
                 valarray[pos,channel+4] = value
     return valarray
  
+_channel_lookup_dict = {(POS_STRAND, "A"): (0,),
+                        (POS_STRAND, "G"): (1,),
+                        (POS_STRAND, "C"): (2,),                      
+                        (POS_STRAND, "T"): (3,),
+                        (POS_STRAND, "N"): (0,1,2,3),
+                        (NEG_STRAND, "A"): (4,),
+                        (NEG_STRAND, "G"): (5,),
+                        (NEG_STRAND, "C"): (6,),                      
+                        (NEG_STRAND, "T"): (7,),
+                        (POS_STRAND, "N"): (4,5,6,7),
+                        (NO_STRAND, "A"): (0,4),
+                        (NO_STRAND, "G"): (1,5),
+                        (NO_STRAND, "C"): (2,6),                    
+                        (NO_STRAND, "T"): (3,7),
+                        (NO_STRAND, "N"): (0,1,2,3,4,5,6,7)}
+
+def write_strand_allele(dst, start, end, channel, strand, seq, value):
+    for i,base in enumerate(seq):
+        channels = _channel_lookup_dict[base]
+        dst[start+i,channels] += (value / float(len(channels)))
+
 def write_interval_data_to_stranded_allele_array(interval_iter, rname_array_dict, dtype, chunksize):
     # check params
     if chunksize <= 0:
@@ -201,7 +232,8 @@ def write_interval_data_to_stranded_allele_array(interval_iter, rname_array_dict
         if end > (chunk_start + chunksize):
             # fill up rest of current chunk with value
             # (uses broadcasting to get all alleles)
-            begin_size = (chunksize - (start - chunk_start))
+            begin_size = chunk_start+chunksize-start
+            #begin_size = (chunksize - (start - chunk_start))
             chunk_arr[start-chunk_start:chunksize] += valarray[:begin_size]
             # do one big write of the rest of the data
             arr[chunk_start+chunksize:end] += valarray[begin_size:]

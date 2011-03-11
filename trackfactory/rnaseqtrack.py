@@ -11,7 +11,7 @@ import pysam
 from track import Track, TrackError, parse_interval
 from intervaltrack import IntervalTrack, get_base_dtype_fields, \
     REF_COL_NAME, START_COL_NAME, END_COL_NAME
-from coveragetrack import CoverageTrack
+from vectortrack import VectorTrack
 from io.sam import BamCoverageIterator, BamCoverageStatistics
 
 JUNCTION_GROUP = "junctions"
@@ -77,14 +77,14 @@ class RnaseqTrack(Track):
             cov_group = h5file.createGroup(self.hdf_group, COVERAGE_GROUP)
         else:
             cov_group = self.hdf_group._f_getChild(COVERAGE_GROUP)
-        self.cov_track = CoverageTrack(cov_group)
+        self.cov_track = VectorTrack(cov_group)
 
     def get_junction_track(self):
         junc_group = self.hdf_group._f_getChild(JUNCTION_GROUP)
         return IntervalTrack(junc_group)
     def get_coverage_track(self):
         cov_group = self.hdf_group._f_getChild(COVERAGE_GROUP)
-        return CoverageTrack(cov_group)
+        return VectorTrack(cov_group)
 
     def fromtophat(self, accepted_hits_bam, junctions_bed):
         # insert splice junction track

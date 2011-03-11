@@ -29,6 +29,26 @@ def getvalue(fh):
 
 class TestBedGraph(unittest.TestCase):
 
+    def test_array_dtypes(self):
+        # float
+        a = np.array([1.25, 2.01, 3.98, 10.1, 4.02], dtype=np.float32)
+        a.resize((a.shape[0],1))
+        output, filename = make_temp()
+        array_to_bedgraph('chr1', a, output)
+        contents = getvalue(output)
+        self.assertTrue(np.array_equal(contents['chr1'], a[:,0]))
+        os.remove(filename)
+        # int
+        b = np.array([1.25, 2.01, 3.98, 10.1, 4.02], dtype=np.int32)
+        b.resize((b.shape[0],1))
+        bcorrect = np.array([1, 2, 3, 10, 4], dtype=np.int32)
+        bcorrect.resize((b.shape[0],1))
+        output, filename = make_temp()
+        array_to_bedgraph('chr1', b, output)
+        contents = getvalue(output)
+        self.assertTrue(np.array_equal(contents['chr1'], bcorrect[:,0]))
+        os.remove(filename)
+
     def test_array_to_bedgraph_zeros(self):
         a = np.array([0, 0, 0, 0, 0])
         a.resize((a.shape[0],1))

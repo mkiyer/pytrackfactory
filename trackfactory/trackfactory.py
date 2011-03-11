@@ -10,7 +10,7 @@ import tables
 
 from track import TrackError, REF_TRACK_NAME, TRACK_CLASS_ATTR, get_ref_length
 from arraytrack import ArrayTrack
-from coveragetrack import CoverageTrack
+from vectortrack import VectorTrack
 from bitarraytrack import BitArrayTrack
 from sequencetrack import SequenceTrack
 from intervaltrack import IntervalTrack
@@ -58,7 +58,7 @@ class TrackFactory(object):
     '''    
     # constants
     track_classes = [ArrayTrack, 
-                     CoverageTrack,
+                     VectorTrack,
                      BitArrayTrack,
                      SequenceTrack, 
                      IntervalTrack,
