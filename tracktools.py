@@ -22,7 +22,7 @@ from trackfactory.io.feature import parse_gtf_features
 from trackfactory import TrackFactory
 from trackfactory.sequencetrack import SequenceTrack
 from trackfactory.arraytrack import ArrayTrack
-from trackfactory.vectortrack import VectorTrack
+from trackfactory.vectortrack import VectorTrack, StrandedVectorTrack, StrandedAlleleVectorTrack
 from trackfactory.intervaltrack import IntervalTrack, get_bed_dtype_fields
 from trackfactory.featuretrack import FeatureTrack
 from trackfactory.rnaseqtrack import RnaseqTrack
@@ -134,11 +134,17 @@ def add_array_track(parser, options):
             t.fromintervals(WiggleReader(open(options.data_file)))
     tf.close()
 
-def add_coverage_track(parser, options):
-    tf = open_trackfactory(parser, options)
-    t = tf.create_track(options.name, VectorTrack)
+def add_vector_track(parser, options):
+    tf = open_trackfactory(parser, options)    
+    if options.mode == "standard":
+        t = tf.create_track(options.name, VectorTrack)
+    elif options.mode == "strand":
+        t = tf.create_track(options.name, StrandedVectorTrack)
+    elif options.mode == "allele":
+        t = tf.create_track(options.name, StrandedAlleleVectorTrack)        
     logging.info("added %s '%s' to trackfactory %s" %
-                 (VectorTrack.__name__, options.name, options.file))
+                 (VectorTrack.__name__, options.name, 
+                  options.file))
     datafile = check_datafile(parser, options)
     if datafile is not None:
         logging.info("inserting data file %s (type=%s)" % 
@@ -333,6 +339,13 @@ def main():
     #
     parser_cov = addsubparsers.add_parser(VectorTrack.__name__,
                                           help='vector of numeric values')
+    parser_cov.add_argument("--strand", dest="mode",
+                            action="store_const", const="strand",
+                            help="store strand-specific information")
+    parser_cov.add_argument("--allele", dest="mode",
+                            action="store_const", const="allele",
+                            help="store allele-specific and strand-specific "
+                            "information")
     parser_cov.add_argument("--bam", dest="file_type",
                             action="store_const", const="bam",
                             help="data file is in BAM format")
@@ -359,8 +372,9 @@ def main():
     parser_cov.add_argument("data_file", default=None,
                             help="(optional) file containing data to "
                             "insert into track")
-    parser_cov.set_defaults(func=add_coverage_track,
+    parser_cov.set_defaults(func=add_vector_track,
                             file_type="bam",
+                            mode="standard",
                             keepdup=True)
     #
     # add an IntervalTrack

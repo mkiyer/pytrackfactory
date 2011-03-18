@@ -17,7 +17,12 @@ the positions returned match the BED/interval format which is zero-based, half-o
 Created on Mar 5, 2011
 """
 from cinterval cimport Interval
-from cinterval import strand_str_to_int, POS_STRAND
+from cinterval import strand_str_to_int
+
+# constants
+DEF POS_STRAND = 0
+DEF NEG_STRAND = 1
+DEF NO_STRAND = 2
 
 cdef enum linemode:
     MODE_BED

@@ -30,8 +30,10 @@ def check_vector_dtype(dtype):
     return dtype
 
 NORM_RLEN_ATTR = "norm_rlen"
-TOTAL_COV_ATTR = "total_cov"
-NUM_FEATURES_ATTR = "num_features"
+TOTAL_COUNT_BY_REF = "count_by_ref"
+TOTAL_COUNT = "total_count"
+NUM_FEATURES_BY_REF = "num_features_by_ref"
+NUM_FEATURES = "num_features"
 
 class VectorTrack(ArrayTrack):
     
@@ -42,16 +44,27 @@ class VectorTrack(ArrayTrack):
 
     def _init_attrs(self):
         # store parameters used tabulate coverage
-        if TOTAL_COV_ATTR not in self.hdf_group._v_attrs:
-            self.hdf_group._v_attrs[TOTAL_COV_ATTR] = 0
-            self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = 0
-        self.total_cov = self._get_total_cov()
+        if TOTAL_COUNT_BY_REF not in self.hdf_group._v_attrs:
+            self.hdf_group._v_attrs[TOTAL_COUNT_BY_REF] = {}
+            self.hdf_group._v_attrs[TOTAL_COUNT] = 0
+            self.hdf_group._v_attrs[NUM_FEATURES_BY_REF] = {}
+            self.hdf_group._v_attrs[NUM_FEATURES] = 0
+        self.total = self._get_total_count()
         self.num_features = self._get_num_features()
 
-    def _get_total_cov(self):
-        return self.hdf_group._v_attrs[TOTAL_COV_ATTR]
+    def _get_total_count(self):
+        return self.hdf_group._v_attrs[TOTAL_COUNT]
     def _get_num_features(self):
-        return self.hdf_group._v_attrs[NUM_FEATURES_ATTR]
+        return self.hdf_group._v_attrs[NUM_FEATURES]
+    
+    def _set_count_attrs(self, total_dict, num_features_dict):
+        self.total = sum(total_dict.values())
+        self.hdf_group._v_attrs[TOTAL_COUNT_BY_REF] = dict(total_dict)
+        self.hdf_group._v_attrs[TOTAL_COUNT] = self.total
+        self.num_features = sum(num_features_dict.values())        
+        self.hdf_group._v_attrs[NUM_FEATURES_BY_REF] = dict(num_features_dict)
+        self.hdf_group._v_attrs[NUM_FEATURES] = self.num_features
+    
     def _select_channels(self, strand=None, alleles=None, channel=0):
         return (channel,)
 
@@ -68,7 +81,7 @@ class VectorTrack(ArrayTrack):
         self._check_bounds(arr, start, end)
         channels = self._select_channels(strand, channel=channel)
         data = arr[start:end,channels].sum(axis=1)
-        return data * (multiplier / self.total_cov)
+        return data * (multiplier / self.total)
 
     def density(self, interval, multiplier=1.0e9, channel=0):
         ref, start, end, strand = self._parse_interval(interval)
@@ -76,7 +89,7 @@ class VectorTrack(ArrayTrack):
         self._check_bounds(arr, start, end)
         channels = self._select_channels(strand, channel=channel)
         count = arr[start:end,channels].sum()
-        return count * (multiplier / (self.total_cov * (end - start)))
+        return count * (multiplier / (self.total * (end - start)))
 
     def tobedgraph(self, interval, fileh, span=1, factor=1.0,
                    norm=False, multiplier=1.0e6, channel=0):
@@ -88,7 +101,7 @@ class VectorTrack(ArrayTrack):
         if start is None: start = 0
         if end is None: end = -1
         if span < 1: span = 1
-        if norm: factor *= (multiplier  / (self.total_cov))
+        if norm: factor *= (multiplier  / (self.total))
         channels = self._select_channels(strand, channel)
         for rname in rnames:
             array_to_bedgraph(rname, self._get_array(rname), fileh, 
@@ -98,17 +111,14 @@ class VectorTrack(ArrayTrack):
 
     def fromintervals(self, interval_iter, channel=0):
         rname_array_dict = self._get_arrays()
-        intervals, total_cov = \
+        num_features_dict, total_dict = \
             write_interval_data_to_array(interval_iter, 
                                          rname_array_dict, 
                                          dtype=self._get_dtype(),
                                          chunksize=(self.h5_chunksize << 4),
                                          mode="channel",
-                                         channel=channel)                                         
-        self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
-        self.total_cov = total_cov
-        self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
-        self.num_features = intervals        
+                                         channel=channel)
+        self._set_count_attrs(total_dict, num_features_dict)                                         
 
 class StrandedVectorTrack(VectorTrack):
     
@@ -123,16 +133,13 @@ class StrandedVectorTrack(VectorTrack):
 
     def fromintervals(self, interval_iter):
         rname_array_dict = self._get_arrays()
-        intervals, total_cov = \
+        num_features_dict, total_dict = \
             write_interval_data_to_array(interval_iter, 
                                          rname_array_dict, 
                                          dtype=self._get_dtype(),
                                          chunksize=(self.h5_chunksize << 4),
                                          mode="strand")
-        self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
-        self.total_cov = total_cov
-        self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
-        self.num_features = intervals
+        self._set_count_attrs(total_dict, num_features_dict)                                         
 
 class StrandedAlleleVectorTrack(StrandedVectorTrack):
 
@@ -148,13 +155,10 @@ class StrandedAlleleVectorTrack(StrandedVectorTrack):
 
     def fromintervals(self, interval_iter):
         rname_array_dict = self._get_arrays()
-        intervals, total_cov = \
+        num_features_dict, total_dict = \
             write_interval_data_to_array(interval_iter, 
                                          rname_array_dict, 
                                          dtype=self._get_dtype(), 
                                          chunksize=(self.h5_chunksize << 2),
                                          mode="allele")
-        self.hdf_group._v_attrs[TOTAL_COV_ATTR] = total_cov
-        self.total_cov = total_cov
-        self.hdf_group._v_attrs[NUM_FEATURES_ATTR] = intervals
-        self.num_features = intervals
+        self._set_count_attrs(total_dict, num_features_dict)

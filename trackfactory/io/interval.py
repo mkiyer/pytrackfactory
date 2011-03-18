@@ -3,6 +3,7 @@ Created on Mar 6, 2011
 
 @author: mkiyer
 '''
+import collections
 import numpy as np
 
 from trackfactory.track import POS_STRAND, NEG_STRAND, NO_STRAND
@@ -70,8 +71,8 @@ def write_interval_data_to_array(interval_iter, rname_array_dict, dtype,
     chunk_end = 0
     dirty = False
     # keep track of statistics
-    intervals = 0
-    total_cov = 0
+    intervals = collections.defaultdict(lambda: 0)
+    total_cov = collections.defaultdict(lambda: 0)
     # parse intervals
     for ival in interval_iter:
         chrom = ival.ref
@@ -83,8 +84,8 @@ def write_interval_data_to_array(interval_iter, rname_array_dict, dtype,
         # ensure value is compatible with array
         value = np.cast[dtype](value)     
         # stats
-        intervals += 1
-        total_cov += ((end - start) * value)
+        intervals[chrom] += 1
+        total_cov[chrom] += ((end - start) * value)
         # check if the new interval is outside the current chunk
         if ((chunk_chrom != chrom) or (start < chunk_start) or 
             (start >= (chunk_start + chunksize))):
