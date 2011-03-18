@@ -3,7 +3,7 @@ Created on Mar 8, 2011
 
 @author: mkiyer
 '''
-from io.cinterval import BedInterval, strand_str_to_int
+from cinterval import BedInterval, strand_str_to_int
 
 def parse_bed6(line_iter, sep="\t"):
     for line in line_iter:

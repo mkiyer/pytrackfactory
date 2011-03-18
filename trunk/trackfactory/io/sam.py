@@ -6,6 +6,7 @@ Created on Mar 6, 2011
 import array
 import collections
 import operator
+import logging
 
 from cinterval import SequenceInterval
 
@@ -34,16 +35,21 @@ def get_genomic_intervals(read):
             qstart += length
             aend += length
         elif (op == CIGAR_N):
-            assert len(qseq) == (aend - astart)
             if aend > astart:
-                intervals.append((astart, aend, qseq))
+                if len(qseq) != (aend - astart):
+                    logging.error("Read %s has aend != astart" % (str(read)))
+                else:
+                    intervals.append((astart, aend, qseq))
             astart = aend + length
             aend = astart
             qseq = array.array('c')
     if aend > astart:
-        assert len(qseq) == (aend - astart)
-        intervals.append((astart, aend, qseq))
-    assert aend == read.aend
+        if len(qseq) != (aend - astart):
+            logging.error("Read %s has aend != astart" % (str(read)))
+        else:
+            intervals.append((astart, aend, qseq))
+    if aend != read.aend:
+        logging.error("Read %s has aend != read.aend" % (str(read)))
     return intervals
 
 class BamCoverageStatistics(object):
