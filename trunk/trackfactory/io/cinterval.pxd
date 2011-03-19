@@ -14,6 +14,7 @@ cdef class Interval:
     cdef public int end 
     cdef public int strand
     cdef public object value
+    cdef public int readnum
 
 cdef class BedInterval(Interval):
     cdef public object name

@@ -15,10 +15,8 @@ import numpy as np
 from track import TrackError, NO_STRAND, POS_STRAND, NEG_STRAND
 from arraytrack import ArrayTrack
 from io.interval import write_interval_data_to_array
-#from io.interval import write_interval_data_to_array, \
-#    write_interval_data_to_stranded_array, \
-#    write_interval_data_to_stranded_allele_array
 from io.bedgraph import array_to_bedgraph
+from lib.channel import get_channel_dict
 
 _vector_dtypes = {"i": np.int32,
                   "f": np.float32}
@@ -34,10 +32,31 @@ TOTAL_COUNT_BY_REF = "count_by_ref"
 TOTAL_COUNT = "total_count"
 NUM_FEATURES_BY_REF = "num_features_by_ref"
 NUM_FEATURES = "num_features"
+PE_ATTR = "is_pe"
+STRAND_ATTR = "is_stranded"
+ALLELE_ATTR = "is_allele"
 
 class VectorTrack(ArrayTrack):
     
-    def __init__(self, hdf_group, dtype="f", channels=1):
+    def __init__(self, hdf_group, dtype="f", 
+                 pe=False, strand=False, allele=False):
+        # make lookup table that converts strand, pe, allele data
+        # to set of channels
+        if PE_ATTR not in hdf_group._v_attrs:
+            hdf_group._v_attrs[PE_ATTR] = pe
+            hdf_group._v_attrs[STRAND_ATTR] = strand            
+            hdf_group._v_attrs[ALLELE_ATTR] = allele
+        self.is_pe = hdf_group._v_attrs[PE_ATTR]
+        self.is_stranded = hdf_group._v_attrs[STRAND_ATTR]
+        self.is_allele = hdf_group._v_attrs[ALLELE_ATTR]
+        self.channel_dict = get_channel_dict(self.is_pe, self.is_stranded, 
+                                             self.is_allele)
+        # figure out number of channels needed        
+        channels = 1
+        if self.is_pe: channels *= 2
+        if self.is_stranded: channels *= 2
+        if self.is_allele: channels *= 4
+        # initialize track
         dtype = check_vector_dtype(dtype)
         super(VectorTrack, self).__init__(hdf_group, dtype, channels)
         self._init_attrs()
@@ -64,35 +83,32 @@ class VectorTrack(ArrayTrack):
         self.num_features = sum(num_features_dict.values())        
         self.hdf_group._v_attrs[NUM_FEATURES_BY_REF] = dict(num_features_dict)
         self.hdf_group._v_attrs[NUM_FEATURES] = self.num_features
-    
-    def _select_channels(self, strand=None, alleles=None, channel=0):
-        return (channel,)
 
-    def count(self, interval, channel=0):
+    def count(self, interval, read=None, allele=None):
         ref, start, end, strand = self._parse_interval(interval)
         arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
-        channels = self._select_channels(strand, channel=channel)
+        channels = self.channel_dict[(read,strand,allele)]
         return arr[start:end,channels].sum()
 
-    def coverage(self, interval, multiplier=1.0e6, channel=0):
+    def coverage(self, interval, multiplier=1.0e6, read=None, allele=None):
         ref, start, end, strand = self._parse_interval(interval)
         arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
-        channels = self._select_channels(strand, channel=channel)
+        channels = self.channel_dict[(read,strand,allele)]
         data = arr[start:end,channels].sum(axis=1)
         return data * (multiplier / self.total)
 
-    def density(self, interval, multiplier=1.0e9, channel=0):
+    def density(self, interval, multiplier=1.0e9, read=None, allele=None):
         ref, start, end, strand = self._parse_interval(interval)
         arr = self._get_array(ref)
         self._check_bounds(arr, start, end)
-        channels = self._select_channels(strand, channel=channel)
+        channels = self.channel_dict[(read,strand,allele)]
         count = arr[start:end,channels].sum()
         return count * (multiplier / (self.total * (end - start)))
 
     def tobedgraph(self, interval, fileh, span=1, factor=1.0,
-                   norm=False, multiplier=1.0e6, channel=0):
+                   norm=False, multiplier=1.0e6, read=None, allele=None):
         ref, start, end, strand = self._parse_interval(interval)
         if ref is None: 
             rnames = self.get_rnames()
@@ -102,35 +118,13 @@ class VectorTrack(ArrayTrack):
         if end is None: end = -1
         if span < 1: span = 1
         if norm: factor *= (multiplier  / (self.total))
-        channels = self._select_channels(strand, channel)
+        channels = self.channel_dict[(read,strand,allele)]
         for rname in rnames:
             array_to_bedgraph(rname, self._get_array(rname), fileh, 
                               start=start, end=end, factor=factor, span=span,
                               chunksize=self.h5_chunksize,
                               channels=channels)
 
-    def fromintervals(self, interval_iter, channel=0):
-        rname_array_dict = self._get_arrays()
-        num_features_dict, total_dict = \
-            write_interval_data_to_array(interval_iter, 
-                                         rname_array_dict, 
-                                         dtype=self._get_dtype(),
-                                         chunksize=(self.h5_chunksize << 4),
-                                         mode="channel",
-                                         channel=channel)
-        self._set_count_attrs(total_dict, num_features_dict)                                         
-
-class StrandedVectorTrack(VectorTrack):
-    
-    def __init__(self, hdf_group, dtype="f"):
-        dtype = check_vector_dtype(dtype)
-        ArrayTrack.__init__(self, hdf_group, dtype, channels=2)
-        self._init_attrs()
-
-    def _select_channels(self, strand, alleles=None, channel=0):
-        if strand == NO_STRAND: return (0,1)
-        return (strand,)
-
     def fromintervals(self, interval_iter):
         rname_array_dict = self._get_arrays()
         num_features_dict, total_dict = \
@@ -138,27 +132,49 @@ class StrandedVectorTrack(VectorTrack):
                                          rname_array_dict, 
                                          dtype=self._get_dtype(),
                                          chunksize=(self.h5_chunksize << 4),
-                                         mode="strand")
+                                         num_channels=self._get_nchannels(),
+                                         channel_dict=self.channel_dict)
         self._set_count_attrs(total_dict, num_features_dict)                                         
 
-class StrandedAlleleVectorTrack(StrandedVectorTrack):
-
-    def __init__(self, hdf_group, dtype="f"):
-        dtype = check_vector_dtype(dtype)
-        ArrayTrack.__init__(self, hdf_group, dtype, channels=8)
-        self._init_attrs()
-
-    def _select_channels(self, strand, alleles=None, channel=0):
-        if strand == NO_STRAND: return (0,1,2,3,4,5,6,7)
-        elif strand == POS_STRAND: return (0,1,2,3)
-        else: return (4,5,6,7)
-
-    def fromintervals(self, interval_iter):
-        rname_array_dict = self._get_arrays()
-        num_features_dict, total_dict = \
-            write_interval_data_to_array(interval_iter, 
-                                         rname_array_dict, 
-                                         dtype=self._get_dtype(), 
-                                         chunksize=(self.h5_chunksize << 2),
-                                         mode="allele")
-        self._set_count_attrs(total_dict, num_features_dict)
+#class StrandedVectorTrack(VectorTrack):
+#    
+#    def __init__(self, hdf_group, dtype="f"):
+#        dtype = check_vector_dtype(dtype)
+#        ArrayTrack.__init__(self, hdf_group, dtype, channels=2)
+#        self._init_attrs()
+#
+#    def _select_channels(self, strand, alleles=None, channel=0):
+#        if strand == NO_STRAND: return (0,1)
+#        return (strand,)
+#
+#    def fromintervals(self, interval_iter):
+#        rname_array_dict = self._get_arrays()
+#        num_features_dict, total_dict = \
+#            write_interval_data_to_array(interval_iter, 
+#                                         rname_array_dict, 
+#                                         dtype=self._get_dtype(),
+#                                         chunksize=(self.h5_chunksize << 4),
+#                                         mode="strand")
+#        self._set_count_attrs(total_dict, num_features_dict)                                         
+#
+#class StrandedAlleleVectorTrack(StrandedVectorTrack):
+#
+#    def __init__(self, hdf_group, dtype="f"):
+#        dtype = check_vector_dtype(dtype)
+#        ArrayTrack.__init__(self, hdf_group, dtype, channels=8)
+#        self._init_attrs()
+#
+#    def _select_channels(self, strand, alleles=None, channel=0):
+#        if strand == NO_STRAND: return (0,1,2,3,4,5,6,7)
+#        elif strand == POS_STRAND: return (0,1,2,3)
+#        else: return (4,5,6,7)
+#
+#    def fromintervals(self, interval_iter):
+#        rname_array_dict = self._get_arrays()
+#        num_features_dict, total_dict = \
+#            write_interval_data_to_array(interval_iter, 
+#                                         rname_array_dict, 
+#                                         dtype=self._get_dtype(), 
+#                                         chunksize=(self.h5_chunksize << 2),
+#                                         mode="allele")
+#        self._set_count_attrs(total_dict, num_features_dict)

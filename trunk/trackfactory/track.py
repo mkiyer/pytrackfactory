@@ -113,23 +113,31 @@ class Track(object):
             yield row.fetch_all_fields()
 
 
-def _parse_interval_string(interval):
-    """ref[strand]:start-end
+def _parse_interval_string(interval_string):
+    """ref[strand]:start-end 
+    
     `strand` can be '+', '-', or '.'    
-    """    
-    m = _interval_string_re.match(interval)
-    ref = m.group('ref')
-    start = m.group('start')
-    end = m.group('end')
-    strand = m.group('strand')    
-    if start is not None: 
-        start = int(start.replace(",", ""))
-    if end is not None: 
-        end = int(end.replace(",", ""))
-    if strand is None: 
-        strand = NO_STRAND
+    """
+    m = _interval_string_re.match(interval_string)
+    if m is None:
+        ref, start, end, strand = None, None, None, NO_STRAND
+        # if interval string is just a single character,
+        # try to extract something useful
+        if len(interval_string) == 1:
+            strand = strand_str_to_int(interval_string[0])
     else:
-        strand = strand_str_to_int(strand)
+        ref = m.group('ref')
+        start = m.group('start')
+        end = m.group('end')
+        strand = m.group('strand')
+        if start is not None: 
+            start = int(start.replace(",", ""))
+        if end is not None: 
+            end = int(end.replace(",", ""))
+        if strand is None: 
+            strand = NO_STRAND
+        else:
+            strand = strand_str_to_int(strand)
     return ref, start, end, strand
 
 def _parse_interval_tuple(interval):

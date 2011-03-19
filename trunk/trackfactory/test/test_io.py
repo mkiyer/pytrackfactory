@@ -7,9 +7,11 @@ import unittest
 import itertools
 import numpy as np
 
+from trackfactory.track import POS_STRAND, NEG_STRAND, NO_STRAND
 from trackfactory.io.sequence import parse_fasta_as_chunks
 from trackfactory.io.interval import write_interval_data_to_array
 from trackfactory.io.cinterval import Interval
+from trackfactory.lib.channel import get_channel_dict
 
 class TestIO(unittest.TestCase):
 
@@ -64,7 +66,7 @@ class TestIO(unittest.TestCase):
             intervals = []
             val = 0
             for start in xrange(0, endpos, intervalsize):
-                intervals.append(Interval(ref, start, start+intervalsize, "+", val))
+                intervals.append(Interval(ref, start, start+intervalsize, POS_STRAND, val))
                 fullarr[start:start+intervalsize,0] = val
                 val += 2
             # test different chunk sizes
@@ -73,9 +75,9 @@ class TestIO(unittest.TestCase):
                 write_interval_data_to_array(iter(intervals), 
                                              {"chr1": testarr}, 
                                              dtype=dtype, 
-                                             channel=0,
                                              chunksize=chunksize,
-                                             mode="channel")
+                                             num_channels=1,
+                                             channel_dict=get_channel_dict())
                 self.assertTrue(np.all(testarr == fullarr))   
         #
         # test intervals on different chromosomes
@@ -92,7 +94,7 @@ class TestIO(unittest.TestCase):
             val = 0
             for start in xrange(0, endpos, intervalsize):
                 ref = refiter.next()
-                intervals.append(Interval(ref, start, start+intervalsize, "+", val))
+                intervals.append(Interval(ref, start, start+intervalsize, POS_STRAND, val))
                 fullarr[ref][start:start+intervalsize] = val
                 val += 2
             # test different chunk sizes
@@ -100,12 +102,12 @@ class TestIO(unittest.TestCase):
                 testarr = {"chr1":np.zeros((endpos+intervalsize,1), dtype=dtype),
                            "chr2":np.zeros((endpos+intervalsize,1), dtype=dtype),
                            "chr3":np.zeros((endpos+intervalsize,1), dtype=dtype)}
-                write_interval_data_to_array(iter(intervals),
-                                             testarr, 
+                write_interval_data_to_array(iter(intervals), 
+                                             testarr,
                                              dtype=dtype, 
-                                             channel=0,
                                              chunksize=chunksize,
-                                             mode="channel")
+                                             num_channels=1,
+                                             channel_dict=get_channel_dict())
                 for chrom in testarr:
                     self.assertTrue(np.all(testarr[chrom] == fullarr[chrom]))
 
