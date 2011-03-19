@@ -15,7 +15,7 @@ import numpy as np
 from track import TrackError, NO_STRAND, POS_STRAND, NEG_STRAND
 from arraytrack import ArrayTrack
 from io.interval import write_interval_data_to_array
-from io.bedgraph import array_to_bedgraph
+from io.cbedgraph import array_to_bedgraph
 from lib.channel import get_channel_dict
 
 _vector_dtypes = {"i": np.int32,
@@ -110,14 +110,14 @@ class VectorTrack(ArrayTrack):
     def tobedgraph(self, interval, fileh, span=1, factor=1.0,
                    norm=False, multiplier=1.0e6, read=None, allele=None):
         ref, start, end, strand = self._parse_interval(interval)
-        if ref is None: 
+        if ref is None:
             rnames = self.get_rnames()
         else:
             rnames = [ref]
         if start is None: start = 0
         if end is None: end = -1
         if span < 1: span = 1
-        if norm: factor *= (multiplier  / (self.total))
+        if norm: factor *= (multiplier  / (self.total))        
         channels = self.channel_dict[(read,strand,allele)]
         for rname in rnames:
             array_to_bedgraph(rname, self._get_array(rname), fileh, 

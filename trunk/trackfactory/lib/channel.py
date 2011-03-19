@@ -16,7 +16,7 @@ def _select_pe_channel(pe, strand, allele):
     if ((pe is None) or (pe < 0)): return (0,1)
     return (pe,)
 def _select_strand_channel(pe, strand, allele):
-    if strand == NO_STRAND: return (0,1)
+    if ((strand is None) or (strand == NO_STRAND)): return (0,1)
     return (strand,)
 def _select_allele_channel(pe, strand, allele):
     if allele is None: return (0,1,2,3)
@@ -67,7 +67,7 @@ def get_channel_dict(is_pe=False, is_strand=False, is_allele=False):
     selector = _channel_dict[(is_pe, is_strand, is_allele)]
     d = {}
     for read in (None,-1,0,1):
-        for strand in (NO_STRAND, POS_STRAND, NEG_STRAND):
+        for strand in (None, NO_STRAND, POS_STRAND, NEG_STRAND):
             for allele in _allele_dict.keys():
                 d[(read, strand, allele)] = selector(read, strand, allele)
     return d

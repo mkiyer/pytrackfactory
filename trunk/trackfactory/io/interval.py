@@ -72,7 +72,6 @@ def write_interval_data_to_array(interval_iter, rname_array_dict, dtype,
             chunk_start = start
             chunk_end = chunk_start
             arr = rname_array_dict[chunk_chrom]
-
         # deal with intervals larger than the chunk size
         if end > (chunk_start + chunksize):
             # fill up rest of current chunk with value
