@@ -119,7 +119,7 @@ class BamCoverageIterator:
     def __init__(self, bamfh, norm_rlen=False, 
                  num_hits_tag=None, hit_prob_tag=None,
                  max_multimaps=None, keep_dup=True,
-                 keep_qcfail=True):
+                 keep_qcfail=True, flip_read2_strand=False):
         self.bamfh = bamfh
         self.read_iterator = bamfh.fetch()
         self.norm_rlen = norm_rlen
@@ -128,6 +128,7 @@ class BamCoverageIterator:
         self.max_multimaps = max_multimaps
         self.keep_dup = keep_dup
         self.keep_qcfail = keep_qcfail
+        self.flip_read2_strand = flip_read2_strand
         self.stats = BamCoverageStatistics()        
         self.intervals = []
         self.done = False
@@ -149,10 +150,12 @@ class BamCoverageIterator:
     def get_next_read(self):
         while len(self.intervals) == 0:
             read = self.read_iterator.next()
-            strand = int(read.is_reverse)
+            strand = int(read.is_reverse)            
             readnum = 0
             if read.is_paired and read.is_read2:
                 readnum = 1
+                if self.flip_read2_strand:
+                    strand = int(not strand)
             #print 'READ', read
             #print 'CIGAR', read.cigar
             # check if read is usable
@@ -168,7 +171,7 @@ class BamCoverageIterator:
                 nh = read.opt(self.num_hits_tag)
                 if (self.max_multimaps is not None) and (nh > self.max_multimaps):
                     continue
-                cov /= nh
+                cov /= float(nh)
             # get reference name
             rname = self.bamfh.getrname(read.tid)
             # find genomic intervals of read alignment

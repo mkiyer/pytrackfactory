@@ -12,7 +12,7 @@ import numpy as np
 import pysam
 
 from trackfactory.track import get_refs_from_sam, get_refs_from_bam, \
-    get_refs_from_bowtie_index, parse_interval
+    get_refs_from_bowtie_index, parse_interval, strand_str_to_int
 
 from trackfactory.io.cwiggle import WiggleReader
 from trackfactory.io.bed import parse_bed6
@@ -225,7 +225,10 @@ def view_track(parser, options):
             print t[region]
     elif track_type == VectorTrack.__name__:
         if options.file_type == "bedgraph":
-            t.tobedgraph(region, sys.stdout)
+            readnum = options.readnum
+            allele = options.allele
+            t.tobedgraph(region, sys.stdout, norm=True, 
+                         read=readnum, allele=allele)
         else:
             print t[region]
     elif track_type == RnaseqTrack.__name__:
@@ -340,6 +343,9 @@ def main():
     parser_cov.add_argument("--pe", dest="pe", action="store_true",
                             default=False, help="store paired-end reads "
                             "separately")
+    parser_cov.add_argument("--fr", dest="fr", action="store_true",
+                            default=False, help="flip strand of read2 "
+                            "(paired-end reads only)")
     parser_cov.add_argument("--allele", dest="allele", action="store_true",
                             default=False, help="store allele (A,T,G,C) "
                             "counts at each position")
@@ -425,6 +431,13 @@ def main():
     parser_view.add_argument('--bedgraph', action="store_const", 
                              const="bedgraph", dest="file_type", 
                              help="output data in bedgraph format")
+    parser_view.add_argument('--read', dest="readnum", type=int,
+                             choices=[-1,0,1], default=-1, 
+                             help="view data from read1/read2 (for "
+                             "paired-end tracks) [default=%(default)s]")
+    parser_view.add_argument('--allele', dest="allele", 
+                             choices=["A","T","G","C","N"], default="N", 
+                             help="view data by allele (A,T,G,C,N)")
     parser_view.add_argument('file', help='trackfactory file')
     parser_view.add_argument('name', help="track name")
     parser_view.add_argument('region', nargs="?", default=None, 
