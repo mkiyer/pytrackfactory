@@ -41,11 +41,6 @@ cdef class Interval:
         self.strand = strand
         self.readnum = readnum
 
-    def write_array(self, object dst, int start, int end, int istart, 
-                    int iend, dict channel_dict):
-        channels = channel_dict[(self.readnum, self.strand, None)]
-        dst[start:end,channels] += (self.value / float(len(channels)))
-
     def __repr__(self):
         fstr = "Interval(%d, %d" % (self.start, self.end)
         if not self.value is None:
@@ -60,13 +55,6 @@ cdef class SequenceInterval(Interval):
                  object value=None, object seq=None, int readnum=-1):
         Interval.__init__(self, ref, start, end, strand, value, readnum)
         self.seq = seq
-
-    def write_array(self, object dst, int start, int end, int istart, 
-                    int iend, dict channel_dict):
-        for i in xrange(istart, iend):
-            dna = self.seq[i]
-            channels = channel_dict[(self.readnum, self.strand, dna)]
-            dst[start+i,channels] += (self.value / float(len(channels)))
 
     def __repr__(self):
         fstr = "Interval(%d, %d" % (self.start, self.end)
@@ -93,4 +81,3 @@ cdef class BedInterval(Interval):
             fstr += ", name=" + str(self.name)
         fstr += ")"
         return fstr
-

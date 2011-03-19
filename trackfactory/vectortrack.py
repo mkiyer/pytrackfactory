@@ -133,48 +133,6 @@ class VectorTrack(ArrayTrack):
                                          dtype=self._get_dtype(),
                                          chunksize=(self.h5_chunksize << 4),
                                          num_channels=self._get_nchannels(),
-                                         channel_dict=self.channel_dict)
-        self._set_count_attrs(total_dict, num_features_dict)                                         
-
-#class StrandedVectorTrack(VectorTrack):
-#    
-#    def __init__(self, hdf_group, dtype="f"):
-#        dtype = check_vector_dtype(dtype)
-#        ArrayTrack.__init__(self, hdf_group, dtype, channels=2)
-#        self._init_attrs()
-#
-#    def _select_channels(self, strand, alleles=None, channel=0):
-#        if strand == NO_STRAND: return (0,1)
-#        return (strand,)
-#
-#    def fromintervals(self, interval_iter):
-#        rname_array_dict = self._get_arrays()
-#        num_features_dict, total_dict = \
-#            write_interval_data_to_array(interval_iter, 
-#                                         rname_array_dict, 
-#                                         dtype=self._get_dtype(),
-#                                         chunksize=(self.h5_chunksize << 4),
-#                                         mode="strand")
-#        self._set_count_attrs(total_dict, num_features_dict)                                         
-#
-#class StrandedAlleleVectorTrack(StrandedVectorTrack):
-#
-#    def __init__(self, hdf_group, dtype="f"):
-#        dtype = check_vector_dtype(dtype)
-#        ArrayTrack.__init__(self, hdf_group, dtype, channels=8)
-#        self._init_attrs()
-#
-#    def _select_channels(self, strand, alleles=None, channel=0):
-#        if strand == NO_STRAND: return (0,1,2,3,4,5,6,7)
-#        elif strand == POS_STRAND: return (0,1,2,3)
-#        else: return (4,5,6,7)
-#
-#    def fromintervals(self, interval_iter):
-#        rname_array_dict = self._get_arrays()
-#        num_features_dict, total_dict = \
-#            write_interval_data_to_array(interval_iter, 
-#                                         rname_array_dict, 
-#                                         dtype=self._get_dtype(), 
-#                                         chunksize=(self.h5_chunksize << 2),
-#                                         mode="allele")
-#        self._set_count_attrs(total_dict, num_features_dict)
+                                         channel_dict=self.channel_dict,
+                                         allele_writer=self.is_allele)
+        self._set_count_attrs(total_dict, num_features_dict)

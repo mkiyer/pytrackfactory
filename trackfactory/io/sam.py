@@ -149,7 +149,10 @@ class BamCoverageIterator:
     def get_next_read(self):
         while len(self.intervals) == 0:
             read = self.read_iterator.next()
-            strand = "+" if read.is_reverse else "-"
+            strand = int(read.is_reverse)
+            readnum = 0
+            if read.is_paired and read.is_read2:
+                readnum = 1
             #print 'READ', read
             #print 'CIGAR', read.cigar
             # check if read is usable
@@ -178,8 +181,9 @@ class BamCoverageIterator:
                 read_cov += (end - start) * interval_cov
                 #print start, end, read.is_reverse, cov, seq
                 ival = SequenceInterval(rname, start, end, 
-                                        strand=int(read.is_reverse), 
+                                        strand=strand,
                                         value=interval_cov, 
-                                        seq=seq)
+                                        seq=seq,
+                                        readnum=readnum)
                 self.intervals.append(ival)
             self.stats.add(read, read_cov)
