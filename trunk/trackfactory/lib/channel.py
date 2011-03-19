@@ -71,3 +71,7 @@ def get_channel_dict(is_pe=False, is_strand=False, is_allele=False):
             for allele in _allele_dict.keys():
                 d[(read, strand, allele)] = selector(read, strand, allele)
     return d
+
+
+
+
