@@ -70,7 +70,7 @@ class TestReferences(unittest.TestCase):
         t = tf.get_track("a")
         for i in range(10):
             self.assertEqual(t[('gene2', i)][0], i)
-        tf.close() 
+        tf.close()
 
 
 if __name__ == "__main__":
