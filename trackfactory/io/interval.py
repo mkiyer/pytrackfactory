@@ -92,7 +92,7 @@ def write_interval_data_to_array(interval_iter, rname_array_dict, dtype,
         dirty = True
         # debugging
         if debug_count == debug_next:
-            logging.debug("\tWrote %d intervals" % (debug_count))
+            logging.debug("\twrote %d intervals" % (debug_count))
             debug_next += debug_every
         debug_count += 1
     # write final chunk

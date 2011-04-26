@@ -27,43 +27,42 @@ def parse_bed6(line_iter, sep="\t"):
                           name=name) 
 
 
-#def parse_bed12_line(line):
-#    if line is None:
-#        return None
-#    line = line.strip()
-#    if line.startswith('#'):
-#        logging.debug("skipping comment line: %s" % (line))
-#        return None
-#    if line.startswith('track'):
-#        logging.debug("skipping track header line: %s"  % (line))
-#        return None
-#    thisfields = line.split('\t')
-#    # first six fields are required
-#    g = BEDGene()
-#    g.chrom = thisfields[0]
-#    g.tx_start = int(thisfields[1])
-#    g.tx_end = int(thisfields[2])
-#    g.name = thisfields[3]
-#    if len(thisfields) <= 4:
-#        g.score = 0
-#        g.strand = '.'
-#    else:
-#        g.score = thisfields[4]
-#        g.strand = thisfields[5]        
-#    if len(thisfields) <= 6:
-#        g.cds_start = g.tx_start
-#        g.cds_end = g.tx_end
-#        g.exon_count = 1
-#        g.exons = [(g.tx_start, g.tx_end)]
-#        g.introns = []
-#    else:
-#        g.cds_start = int(thisfields[6])
-#        g.cds_end = int(thisfields[7])
-#        g.exon_count = int(thisfields[9])
-#        block_sizes = map(int, thisfields[10].split(',')[:-1])
-#        block_starts = map(int, thisfields[11].split(',')[:-1])        
-#        g.exon_starts = [(g.tx_start + start) for start in block_starts]        
-#        g.exon_ends = [(start + size) for start, size in zip(g.exon_starts, block_sizes)]
-#        g.exons = zip(g.exon_starts, g.exon_ends)
-#        g.introns = zip(g.exon_ends, g.exon_starts[1:])        
-#    return g
+class BedGene(object):
+    __slots__ = ('chrom', 'tx_start', 'tx_end', 'name', 'score', 'strand',
+                 'cds_start', 'cds_end', 'exon_count', 'exons', 'introns')
+    
+    @staticmethod
+    def parse_line(line):
+        if line is None:
+            return None
+        line = line.strip()
+        if line.startswith('#'):
+            return None
+        if line.startswith('track'):
+            return None
+        fields = line.split('\t')
+        g = BedGene()
+        g.chrom = fields[0]
+        g.tx_start = int(fields[1])
+        g.tx_end = int(fields[2])
+        g.name = fields[3]
+        g.score = fields[4]
+        g.strand = fields[5]
+        g.cds_start = int(fields[6])
+        g.cds_end = int(fields[7])
+        g.exon_count = int(fields[9])
+        block_sizes = map(int, fields[10].split(',')[:-1])
+        block_starts = map(int, fields[11].split(',')[:-1])        
+        exon_starts = [(g.tx_start + start) for start in block_starts]        
+        exon_ends = [(start + size) for start, size in zip(exon_starts, block_sizes)]
+        g.exons = zip(exon_starts, exon_ends)
+        g.introns = zip(exon_ends, exon_starts[1:])        
+        return g
+    
+    @staticmethod
+    def parse(line_iter):
+        for line in line_iter:
+            g = BedGene.parse_line(line)
+            if g is None:
+                continue
+            yield g

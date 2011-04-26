@@ -156,7 +156,8 @@ def add_vector_track(parser, options):
                                                   hit_prob_tag=options.bam_prob,
                                                   max_multimaps=options.max_multihits,
                                                   keep_dup=options.keep_dup,
-                                                  keep_qcfail=False)
+                                                  keep_qcfail=False,
+                                                  flip_read2_strand=options.fr)
             t.fromintervals(intervalcoviter)
             # store coverage statistics to allow normalization calculations
             stats = intervalcoviter.stats
@@ -233,7 +234,6 @@ def view_track(parser, options):
             print t[region]
     elif track_type == RnaseqTrack.__name__:
         cov_track = t.get_coverage_track()
-        #print cov_track.tobedgraph(region, sys.stdout)
         print cov_track.density(region)
         junc_track = t.get_junction_track()
         print junc_track[region]
