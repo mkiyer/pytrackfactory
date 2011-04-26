@@ -64,7 +64,7 @@ class Track(object):
     def _parse_interval(self, key):
         ref, start, end, strand = parse_interval(key)
         if ref is None:
-            return None, None, None, None
+            return None, None, None, strand
         if not self.has_ref(ref): 
             raise TrackError("unknown reference '%s'" % (ref))
         if start is None:

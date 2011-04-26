@@ -64,7 +64,7 @@ class RnaseqTrack(Track):
     '''contains both genomic coverage data (array track) and splice
     junction data (interval track)
     '''
-    def __init__(self, hdf_group, stranded=False):
+    def __init__(self, hdf_group, pe=False, strand=False, allele=False):
         super(RnaseqTrack, self).__init__(hdf_group)        
         h5file = self._get_hdf_file()
         if JUNCTION_GROUP not in self.hdf_group:
@@ -77,7 +77,8 @@ class RnaseqTrack(Track):
             cov_group = h5file.createGroup(self.hdf_group, COVERAGE_GROUP)
         else:
             cov_group = self.hdf_group._f_getChild(COVERAGE_GROUP)
-        self.cov_track = VectorTrack(cov_group)
+        self.cov_track = VectorTrack(cov_group, pe=pe, strand=strand, 
+                                     allele=allele)
 
     def get_junction_track(self):
         junc_group = self.hdf_group._f_getChild(JUNCTION_GROUP)
@@ -86,7 +87,9 @@ class RnaseqTrack(Track):
         cov_group = self.hdf_group._f_getChild(COVERAGE_GROUP)
         return VectorTrack(cov_group)
 
-    def fromtophat(self, accepted_hits_bam, junctions_bed):
+    def fromtophat(self, accepted_hits_bam, junctions_bed,
+                   max_multimaps=None,
+                   flip_read2_strand=True):
         # insert splice junction track
         track_name = self.hdf_group._v_name
         rnames = set(self.get_rnames())
@@ -110,7 +113,8 @@ class RnaseqTrack(Track):
                                               hit_prob_tag=None,
                                               max_multimaps=None,
                                               keep_dup=True,
-                                              keep_qcfail=False)
+                                              keep_qcfail=False,
+                                              flip_read2_strand=True)
         self.cov_track.fromintervals(intervalcoviter)
         # store coverage statistics to allow normalization calculations
         stats = intervalcoviter.stats
